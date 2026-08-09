@@ -10,30 +10,45 @@ import type {
   Event,
   GameState,
   PendingPower,
+  PendingSnapGive,
   Phase,
   PlayerId,
+  RuleConfig,
   SlotIndex,
 } from "./types";
 
 export const HIDDEN = "hidden" as const;
 export type VisibleCard = CardId | typeof HIDDEN | null; // null = EMPTY slot
 
+export interface PlayerViewPlayer {
+  readonly id: PlayerId;
+  readonly name: string;
+  readonly connected: boolean;
+  readonly eliminated: boolean;
+  readonly cumulativeScore: number;
+  readonly roundScore: number | null;
+  readonly hasPeeked: boolean;
+  readonly layout: readonly VisibleCard[];
+}
+
+/**
+ * Everything a client is allowed to know, and — deliberately — everything a
+ * client needs. The UI renders from this alone: a networked player holds no
+ * `GameState`, so any field the renderer reaches for has to arrive here or not
+ * at all. `config`, `hostId`, `turnOrder` and `pendingSnapGive` are public
+ * knowledge (the rules, who deals, whose turn is next, and a snap everyone
+ * watched happen), which is why they can be shipped whole.
+ */
 export interface PlayerView {
   readonly you: PlayerId;
   readonly phase: Phase;
   readonly roundNumber: number;
   readonly turnNumber: number;
+  readonly config: RuleConfig;
+  readonly hostId: PlayerId;
+  readonly turnOrder: readonly PlayerId[];
   readonly currentPlayer: PlayerId;
-  readonly players: readonly {
-    readonly id: PlayerId;
-    readonly name: string;
-    readonly connected: boolean;
-    readonly eliminated: boolean;
-    readonly cumulativeScore: number;
-    readonly roundScore: number | null;
-    readonly hasPeeked: boolean;
-    readonly layout: readonly VisibleCard[];
-  }[];
+  readonly players: readonly PlayerViewPlayer[];
   readonly discard: readonly CardId[];
   readonly discardVersion: number;
   readonly stockCount: number;
@@ -44,6 +59,7 @@ export interface PlayerView {
     readonly ownerId: PlayerId;
     readonly targets: readonly { playerId: PlayerId; slot: SlotIndex }[];
   } | null;
+  readonly pendingSnapGive: PendingSnapGive | null;
   readonly announcerId: PlayerId | null;
   readonly finalLapRemaining: number | null;
   readonly cards: Readonly<Record<CardId, Card>>;
@@ -100,6 +116,9 @@ export function projectFor(s: GameState, viewer: PlayerId): PlayerView {
     phase: s.phase,
     roundNumber: s.roundNumber,
     turnNumber: s.turnNumber,
+    config: s.config,
+    hostId: s.hostId,
+    turnOrder: s.turnOrder,
     currentPlayer: currentPlayerId(s),
     players,
     discard: s.discard,
@@ -114,6 +133,7 @@ export function projectFor(s: GameState, viewer: PlayerId): PlayerView {
           targets: s.pendingPower.targets.map((t) => ({ playerId: t.playerId, slot: t.slot })),
         }
       : null,
+    pendingSnapGive: s.pendingSnapGive,
     announcerId: s.announcerId,
     finalLapRemaining: s.finalLapRemaining,
     cards,

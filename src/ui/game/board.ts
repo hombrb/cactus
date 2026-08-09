@@ -1,7 +1,7 @@
+import { HIDDEN, type PlayerView, type VisibleCard } from "../../engine/project";
 import { nearestSlots } from "../../engine/turn";
-import { projectFor, HIDDEN, type PlayerView, type VisibleCard } from "../../engine/project";
-import type { Action, Event, GameState, PlayerId, SlotRef } from "../../engine/types";
-import type { Store } from "../store";
+import type { Action, PlayerId, SlotRef } from "../../engine/types";
+import type { GameClient } from "../client";
 import { createCardElement, paintCard } from "./card";
 import { attachGestures } from "./gestures";
 import { RevealGrants } from "./privacy";
@@ -10,7 +10,16 @@ type Seat = "top" | "bottom";
 
 interface HalfRefs {
   readonly seat: Seat;
+  /** Whose cards this half shows. */
   readonly playerId: PlayerId;
+  /**
+   * Whose projection this half is rendered from. Equal to `playerId` when this
+   * device holds that player's seat; otherwise the local player, who sees the
+   * opponent's half exactly as the network lets them — backs.
+   */
+  readonly viewer: PlayerId;
+  /** Only a seat this device owns may dispatch from its half. */
+  readonly live: boolean;
   readonly root: HTMLElement;
   readonly name: HTMLElement;
   readonly score: HTMLElement;
@@ -25,9 +34,16 @@ interface HalfRefs {
 
 const REVEAL_PHASES = new Set(["REVEAL", "ROUND_END", "MATCH_END"]);
 
+/**
+ * The flat-table board: two players facing each other across one phone.
+ *
+ * It reads nothing but `PlayerView`s obtained from the client, so the same
+ * renderer works whether the authority is this process or a socket away.
+ */
 export class Board {
   private readonly halves: HalfRefs[] = [];
-  private readonly grants = new RevealGrants();
+  /** One grant ledger per seat this device owns — never one per player. */
+  private readonly grants = new Map<PlayerId, RevealGrants>();
   private readonly discardCard: HTMLElement;
   private readonly stockCard: HTMLElement;
   private readonly middle: HTMLElement;
@@ -36,10 +52,15 @@ export class Board {
 
   constructor(
     private readonly root: HTMLElement,
-    private readonly store: Store,
+    private readonly client: GameClient,
     private readonly onQuit: () => void,
   ) {
-    const [bottomId, topId] = [store.state.turnOrder[0]!, store.state.turnOrder[1]!];
+    for (const seat of client.seats) this.grants.set(seat, new RevealGrants(seat));
+
+    // Flat table is a two-sided layout by construction. Three-to-eight players
+    // is a different board, not a wider one — see HANDOVER phase 5.
+    const view = this.primaryView();
+    const [bottomId, topId] = [view.turnOrder[0]!, view.turnOrder[1]!];
 
     root.innerHTML = `
       <div class="board">
@@ -62,14 +83,19 @@ export class Board {
     this.halves.push(this.buildHalf("top", topId));
 
     this.middle.querySelector(".pile--stock")!.addEventListener("click", () => {
-      this.dispatch({ type: "DrawStock", playerId: this.store.state.turnOrder[this.store.state.currentPlayerIndex]! });
+      this.dispatch({ type: "DrawStock", playerId: this.currentId() });
     });
     this.middle.querySelector(".pile--discard")!.addEventListener("click", () => {
-      this.dispatch({ type: "TakeDiscard", playerId: this.store.state.turnOrder[this.store.state.currentPlayerIndex]! });
+      this.dispatch({ type: "TakeDiscard", playerId: this.currentId() });
     });
 
-    this.unsubscribe = store.subscribe((_state, events) => {
-      this.grants.ingest(events);
+    this.unsubscribe = client.subscribe((updates) => {
+      for (const update of updates) {
+        this.grants.get(update.seat)?.ingest(update.events);
+        // The round can end on somebody else's action; anything still exposed
+        // has to go the moment it does.
+        if (update.events.some((e) => e.type === "RoundRevealed")) this.hideAllGrants();
+      }
       this.patch();
     });
     this.patch();
@@ -81,13 +107,24 @@ export class Board {
   }
 
   private dispatch(action: Action): void {
-    const events = this.store.dispatch(action);
-    this.reactTo(events);
+    this.client.dispatch(action);
   }
 
-  /** Anything private still on screen is hidden the instant the round ends. */
-  private reactTo(events: readonly Event[]): void {
-    if (events.some((e) => e.type === "RoundRevealed")) this.grants.hideAll();
+  /** Public state — piles, phase, turn — is identical in every view. */
+  private primaryView(): PlayerView {
+    return this.client.view(this.client.seats[0]!);
+  }
+
+  private viewFor(half: HalfRefs): PlayerView {
+    return this.client.view(half.viewer);
+  }
+
+  private grantsFor(half: HalfRefs): RevealGrants | undefined {
+    return this.grants.get(half.viewer);
+  }
+
+  private hideAllGrants(): void {
+    for (const grants of this.grants.values()) grants.hideAll();
   }
 
   private buildHalf(seat: Seat, playerId: PlayerId): HalfRefs {
@@ -113,9 +150,12 @@ export class Board {
     const trayCard = createCardElement("card card--tray");
     root.querySelector<HTMLElement>(".tray__slot")!.prepend(trayCard);
 
+    const live = this.client.seats.includes(playerId);
     const half: HalfRefs = {
       seat,
       playerId,
+      viewer: live ? playerId : this.client.seats[0]!,
+      live,
       root,
       name: root.querySelector<HTMLElement>(".plate__name")!,
       score: root.querySelector<HTMLElement>(".plate__score")!,
@@ -142,26 +182,26 @@ export class Board {
   }
 
   private attachTrayGestures(half: HalfRefs): void {
+    if (!half.live) return;
     const inward = half.seat === "top" ? "down" : "up";
     attachGestures(
       half.trayCard,
       {
         onTap: () => {
-          const state = this.store.state;
-          if (state.heldCard !== null && this.currentId() === half.playerId) {
+          if (this.viewFor(half).heldBy === half.playerId) {
             half.trayCard.dataset.revealed =
               half.trayCard.dataset.revealed === "1" ? "0" : "1";
             this.patch();
           }
         },
         onLongPressStart: () => {
-          const ref = this.foreignGrant(half.playerId);
-          if (ref && this.grants.beginLook(half.playerId, ref)) this.patch();
+          const ref = this.foreignGrant(half);
+          if (ref && this.grantsFor(half)?.beginLook(ref)) this.patch();
         },
         onLongPressEnd: () => {
-          const ref = this.foreignGrant(half.playerId);
+          const ref = this.foreignGrant(half);
           if (ref) {
-            this.grants.endLook(half.playerId, ref);
+            this.grantsFor(half)?.endLook(ref);
             this.patch();
           }
         },
@@ -170,21 +210,22 @@ export class Board {
     );
   }
 
-  /** A pending grant on a slot that is not the viewer's own. */
-  private foreignGrant(viewer: PlayerId): SlotRef | null {
-    for (const p of this.store.state.players) {
-      if (p.id === viewer) continue;
+  /** A pending grant on a slot that is not this half's own. */
+  private foreignGrant(half: HalfRefs): SlotRef | null {
+    const grants = this.grantsFor(half);
+    if (!grants) return null;
+    for (const p of this.viewFor(half).players) {
+      if (p.id === half.playerId) continue;
       for (let i = 0; i < p.layout.length; i++) {
         const ref = { playerId: p.id, slot: i };
-        if (this.grants.has(viewer, ref)) return ref;
+        if (grants.has(ref)) return ref;
       }
     }
     return null;
   }
 
   private currentId(): PlayerId {
-    const s = this.store.state;
-    return s.turnOrder[s.currentPlayerIndex]!;
+    return this.primaryView().currentPlayer;
   }
 
   // -------------------------------------------------------------------------
@@ -192,51 +233,43 @@ export class Board {
   // -------------------------------------------------------------------------
 
   private patch(): void {
-    const state = this.store.state;
-    for (const half of this.halves) {
-      const view = projectFor(state, half.playerId);
-      this.patchHalf(half, view, state);
-    }
-    this.patchMiddle(state);
+    for (const half of this.halves) this.patchHalf(half, this.viewFor(half));
+    this.patchMiddle(this.primaryView());
   }
 
-  private patchMiddle(state: GameState): void {
-    const top = state.discard[0];
-    if (top) paintCard(this.discardCard, "face", state.cards[top]);
+  private patchMiddle(view: PlayerView): void {
+    const top = view.discard[0];
+    if (top) paintCard(this.discardCard, "face", view.cards[top]);
     else paintCard(this.discardCard, "empty");
 
-    paintCard(this.stockCard, state.stock.length > 0 ? "back" : "empty");
+    paintCard(this.stockCard, view.stockCount > 0 ? "back" : "empty");
 
-    const actionable = state.phase === "TURN_START";
+    const actionable = view.phase === "TURN_START";
     this.middle.querySelector(".pile--stock")!.toggleAttribute("data-live", actionable);
     this.middle
       .querySelector(".pile--discard")!
-      .toggleAttribute("data-live", actionable && state.discard.length > 0);
+      .toggleAttribute("data-live", actionable && view.discard.length > 0);
   }
 
-  private patchHalf(half: HalfRefs, view: PlayerView, state: GameState): void {
+  private patchHalf(half: HalfRefs, view: PlayerView): void {
     const me = view.players.find((p) => p.id === half.playerId)!;
     const isCurrent = view.currentPlayer === half.playerId;
-    const revealAll = REVEAL_PHASES.has(state.phase);
+    const revealAll = REVEAL_PHASES.has(view.phase);
 
     half.root.dataset.active = String(isCurrent && !revealAll);
-    half.name.textContent = me.name + (state.announcerId === me.id ? " · cactus" : "");
+    half.name.textContent = me.name + (view.announcerId === me.id ? " · cactus" : "");
     half.score.textContent = revealAll && me.roundScore !== null
       ? `${me.roundScore} · total ${me.cumulativeScore}`
       : `${me.cumulativeScore}`;
     half.stock.textContent = `pioche ${view.stockCount}`;
 
-    this.patchSlots(half, view, state, revealAll);
-    this.patchTray(half, view, state, revealAll, isCurrent);
+    this.patchSlots(half, view, revealAll);
+    this.patchTray(half, view, revealAll, isCurrent);
   }
 
-  private patchSlots(
-    half: HalfRefs,
-    view: PlayerView,
-    state: GameState,
-    revealAll: boolean,
-  ): void {
+  private patchSlots(half: HalfRefs, view: PlayerView, revealAll: boolean): void {
     const me = view.players.find((p) => p.id === half.playerId)!;
+    const grants = this.grantsFor(half);
 
     // Layouts grow (penalty cards) and gain holes (snaps); rebuild only when the
     // count actually changes so cards keep their nodes and their transitions.
@@ -260,16 +293,16 @@ export class Board {
         paintCard(el, "empty");
       } else if (visible === HIDDEN) {
         paintCard(el, "back");
-      } else if (revealAll || this.grants.isLooking(half.playerId, ref)) {
+      } else if (revealAll || grants?.isLooking(ref)) {
         // The projection permits it AND the player is actively looking.
         paintCard(el, "face", view.cards[visible]);
       } else {
         paintCard(el, "back");
       }
 
-      el.dataset.grant = this.grants.has(half.playerId, ref) ? "1" : "0";
-      el.dataset.target = this.isTargetable(state, ref) ? "1" : "0";
-      el.dataset.chosen = state.pendingPower?.targets.some(
+      el.dataset.grant = grants?.has(ref) ? "1" : "0";
+      el.dataset.target = half.live && this.isTargetable(view, ref) ? "1" : "0";
+      el.dataset.chosen = view.pendingPower?.targets.some(
         (t) => t.playerId === ref.playerId && t.slot === ref.slot,
       )
         ? "1"
@@ -277,15 +310,15 @@ export class Board {
     });
   }
 
-  private isTargetable(state: GameState, ref: SlotRef): boolean {
-    const owner = state.players.find((p) => p.id === ref.playerId);
+  private isTargetable(view: PlayerView, ref: SlotRef): boolean {
+    const owner = view.players.find((p) => p.id === ref.playerId);
     const slot = owner?.layout[ref.slot];
-    if (!slot || slot.cardId === null) return false;
+    if (slot === undefined || slot === null) return false;
 
-    if (state.pendingPower) {
-      const kind = state.pendingPower.kind;
-      const isOwn = ref.playerId === state.pendingPower.ownerId;
-      const first = state.pendingPower.targets[0];
+    if (view.pendingPower) {
+      const kind = view.pendingPower.kind;
+      const isOwn = ref.playerId === view.pendingPower.ownerId;
+      const first = view.pendingPower.targets[0];
       switch (kind) {
         case "PEEK_OWN":
           return isOwn;
@@ -300,13 +333,14 @@ export class Board {
       }
     }
 
-    if (state.phase === "AWAIT_HELD_DECISION" || state.phase === "AWAIT_SLOT_FOR_DISCARD") {
-      return ref.playerId === this.currentId();
+    if (view.phase === "AWAIT_HELD_DECISION" || view.phase === "AWAIT_SLOT_FOR_DISCARD") {
+      return ref.playerId === view.currentPlayer;
     }
     return false;
   }
 
   private attachSlotGestures(half: HalfRefs, index: number): void {
+    if (!half.live) return;
     const el = half.slots[index] ?? half.layout.children[index];
     if (!(el instanceof HTMLElement)) return;
     const ref: SlotRef = { playerId: half.playerId, slot: index };
@@ -315,22 +349,23 @@ export class Board {
     attachGestures(
       el,
       {
-        onTap: () => this.onSlotTap(ref),
+        onTap: () => this.onSlotTap(half, ref),
         onLongPressStart: () => {
-          if (this.store.state.phase === "INITIAL_PEEK") this.ensurePeekDispatched(half.playerId);
-          if (this.grants.beginLook(half.playerId, ref)) this.patch();
+          if (this.viewFor(half).phase === "INITIAL_PEEK") this.ensurePeekDispatched(half);
+          if (this.grantsFor(half)?.beginLook(ref)) this.patch();
         },
         onLongPressEnd: () => {
-          this.grants.endLook(half.playerId, ref);
+          this.grantsFor(half)?.endLook(ref);
           this.patch();
         },
         onSwipeInward: () => {
-          if (!this.store.state.config.snap.enabled) return;
+          const view = this.viewFor(half);
+          if (!view.config.snap.enabled) return;
           this.dispatch({
             type: "Snap",
             playerId: half.playerId,
             target: ref,
-            forVersion: this.store.state.discardVersion,
+            forVersion: view.discardVersion,
           });
         },
       },
@@ -338,29 +373,33 @@ export class Board {
     );
   }
 
-  private ensurePeekDispatched(playerId: PlayerId): void {
-    const state = this.store.state;
-    const me = state.players.find((p) => p.id === playerId);
+  private ensurePeekDispatched(half: HalfRefs): void {
+    const view = this.viewFor(half);
+    const me = view.players.find((p) => p.id === half.playerId);
     if (!me || me.hasPeeked) return;
-    this.dispatch({ type: "PeekInitial", playerId, slots: nearestSlots(state.config) });
+    this.dispatch({
+      type: "PeekInitial",
+      playerId: half.playerId,
+      slots: nearestSlots(view.config),
+    });
   }
 
-  private onSlotTap(ref: SlotRef): void {
-    const state = this.store.state;
-    const current = this.currentId();
+  private onSlotTap(half: HalfRefs, ref: SlotRef): void {
+    const view = this.viewFor(half);
+    const current = view.currentPlayer;
 
-    if (state.pendingPower) {
-      this.dispatch({ type: "PowerTarget", playerId: state.pendingPower.ownerId, target: ref });
+    if (view.pendingPower) {
+      this.dispatch({ type: "PowerTarget", playerId: view.pendingPower.ownerId, target: ref });
       return;
     }
     if (
-      (state.phase === "AWAIT_HELD_DECISION" || state.phase === "AWAIT_SLOT_FOR_DISCARD") &&
+      (view.phase === "AWAIT_HELD_DECISION" || view.phase === "AWAIT_SLOT_FOR_DISCARD") &&
       ref.playerId === current
     ) {
       this.dispatch({ type: "PlaceInSlot", playerId: current, slot: ref.slot });
       return;
     }
-    if (state.phase === "AWAIT_SNAP_GIVE" && state.pendingSnapGive?.snapperId === ref.playerId) {
+    if (view.phase === "AWAIT_SNAP_GIVE" && view.pendingSnapGive?.snapperId === ref.playerId) {
       this.dispatch({ type: "SnapGive", playerId: ref.playerId, slot: ref.slot });
     }
   }
@@ -372,7 +411,6 @@ export class Board {
   private patchTray(
     half: HalfRefs,
     view: PlayerView,
-    state: GameState,
     revealAll: boolean,
     isCurrent: boolean,
   ): void {
@@ -388,16 +426,16 @@ export class Board {
       buttons.push({ label: "Recommencer", run: () => { this.menuOpenFor = null; this.onQuit(); } });
       buttons.push({ label: "Fermer", kind: "ghost", run: () => { this.menuOpenFor = null; this.patch(); } });
     } else if (revealAll) {
-      prompt = this.endOfRoundPrompt(state, half.playerId);
-      if (state.phase === "ROUND_END") {
+      prompt = this.endOfRoundPrompt(view, half.playerId);
+      if (view.phase === "ROUND_END") {
         buttons.push({
           label: "Manche suivante",
-          run: () => this.dispatch({ type: "StartNextRound", playerId: state.hostId }),
+          run: () => this.dispatch({ type: "StartNextRound", playerId: view.hostId }),
         });
-      } else if (state.phase === "MATCH_END") {
+      } else if (view.phase === "MATCH_END") {
         buttons.push({ label: "Nouvelle partie", run: () => this.onQuit() });
       }
-    } else if (state.phase === "INITIAL_PEEK") {
+    } else if (view.phase === "INITIAL_PEEK") {
       prompt = me.hasPeeked
         ? "En attente de l'autre joueur"
         : "Maintiens tes deux cartes du bas pour les regarder";
@@ -409,15 +447,15 @@ export class Board {
             this.dispatch({
               type: "PeekInitial",
               playerId: half.playerId,
-              slots: nearestSlots(state.config),
+              slots: nearestSlots(view.config),
             }),
         });
       }
     } else {
       // A card this player may look at, sitting in the other half.
-      const foreign = this.foreignGrant(half.playerId);
+      const foreign = this.foreignGrant(half);
       if (foreign) {
-        const looking = this.grants.isLooking(half.playerId, foreign);
+        const looking = this.grantsFor(half)?.isLooking(foreign) ?? false;
         const cardId = view.players
           .find((p) => p.id === foreign.playerId)
           ?.layout[foreign.slot];
@@ -428,7 +466,7 @@ export class Board {
       }
 
       if (isCurrent) {
-        const result = this.currentPlayerTray(state, view, half);
+        const result = this.currentPlayerTray(view, half);
         prompt = result.prompt || prompt;
         for (const b of result.buttons) buttons.push(b);
         if (result.trayFace) {
@@ -448,11 +486,10 @@ export class Board {
       paintCard(half.trayCard, trayFace, trayCardId ? view.cards[trayCardId] : undefined);
     }
 
-    this.renderButtons(half.actions, buttons);
+    this.renderButtons(half.actions, half.live ? buttons : []);
   }
 
   private currentPlayerTray(
-    state: GameState,
     view: PlayerView,
     half: HalfRefs,
   ): {
@@ -465,7 +502,7 @@ export class Board {
     const me = half.playerId;
     const buttons: { label: string; kind?: string; run: () => void }[] = [];
 
-    switch (state.phase) {
+    switch (view.phase) {
       case "TURN_START":
         return { prompt: "Pioche ou prends la défausse", buttons };
 
@@ -507,7 +544,7 @@ export class Board {
         return { prompt: "Regarde une carte adverse", buttons };
 
       case "POWER_AWAIT_TWO_SLOTS": {
-        const first = state.pendingPower?.targets.length ?? 0;
+        const first = view.pendingPower?.targets.length ?? 0;
         buttons.push({ label: "Passer", kind: "ghost", run: () => this.dispatch({ type: "PowerSkip", playerId: me }) });
         return {
           prompt:
@@ -531,7 +568,7 @@ export class Board {
         return { prompt: "Donne une de tes cartes", buttons };
 
       case "TURN_END":
-        if (state.announcerId === null) {
+        if (view.announcerId === null) {
           buttons.push({ label: "Cactus !", kind: "accent", run: () => this.dispatch({ type: "AnnounceCactus", playerId: me }) });
         }
         buttons.push({ label: "Terminer", run: () => this.dispatch({ type: "EndTurn", playerId: me }) });
@@ -542,19 +579,21 @@ export class Board {
     }
   }
 
-  private endOfRoundPrompt(state: GameState, viewer: PlayerId): string {
-    const me = state.players.find((p) => p.id === viewer);
-    const other = state.players.find((p) => p.id !== viewer);
-    if (!me || !other) return "";
+  /** Written against "the best of the others" so it survives more than two seats. */
+  private endOfRoundPrompt(view: PlayerView, viewer: PlayerId): string {
+    const me = view.players.find((p) => p.id === viewer);
+    const others = view.players.filter((p) => p.id !== viewer);
+    if (!me || others.length === 0) return "";
 
-    if (state.phase === "MATCH_END") {
-      if (me.cumulativeScore === other.cumulativeScore) return "Égalité !";
-      return me.cumulativeScore < other.cumulativeScore ? "Tu gagnes la partie !" : "Tu perds la partie";
+    if (view.phase === "MATCH_END") {
+      const best = Math.min(...others.map((p) => p.cumulativeScore));
+      if (me.cumulativeScore === best) return "Égalité !";
+      return me.cumulativeScore < best ? "Tu gagnes la partie !" : "Tu perds la partie";
     }
 
     const mine = me.roundScore ?? 0;
-    const theirs = other.roundScore ?? 0;
-    const announced = state.announcerId === viewer;
+    const theirs = Math.min(...others.map((p) => p.roundScore ?? 0));
+    const announced = view.announcerId === viewer;
     if (mine === theirs) return `Manche nulle · ${mine}`;
     if (mine < theirs) return `Manche gagnée · ${mine}`;
     return announced ? `Cactus raté · ${mine}` : `Manche perdue · ${mine}`;

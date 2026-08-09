@@ -8,27 +8,36 @@
 // So a face is drawn only when BOTH hold: the projection permits it, and an
 // explicit, single-use grant exists. A grant is created by the rules event that
 // entitled the player to look, and is consumed the moment they stop looking.
+//
+// One instance belongs to one viewer and is fed that viewer's *projected* event
+// stream — the same bytes an online client would receive. It therefore cannot
+// grant anything the network would not also have entitled that player to.
 
 import type { Event, PlayerId, SlotRef } from "../../engine/types";
 
-const key = (viewer: PlayerId, ref: SlotRef): string =>
-  `${viewer}|${ref.playerId}|${ref.slot}`;
+const key = (ref: SlotRef): string => `${ref.playerId}|${ref.slot}`;
 
 export class RevealGrants {
   private granted = new Set<string>();
   private looking = new Set<string>();
 
-  /** Grants created by the events that entitle a player to look. */
+  constructor(private readonly viewer: PlayerId) {}
+
+  /** Grants created by the events that entitle this viewer to look. */
   ingest(events: readonly Event[]): void {
     for (const e of events) {
       switch (e.type) {
         case "InitialPeeked":
+          // A projected InitialPeeked for somebody else carries HIDDEN ids; the
+          // owner check is what keeps us from granting on it anyway.
+          if (e.playerId !== this.viewer) break;
           for (const r of e.reveals) {
-            this.granted.add(key(e.playerId, { playerId: e.playerId, slot: r.slot }));
+            this.granted.add(key({ playerId: e.playerId, slot: r.slot }));
           }
           break;
         case "CardRevealed":
-          this.granted.add(key(e.toPlayerId, e.ref));
+          if (e.toPlayerId !== this.viewer) break;
+          this.granted.add(key(e.ref));
           break;
         case "RoundStarted":
           this.granted.clear();
@@ -40,24 +49,24 @@ export class RevealGrants {
     }
   }
 
-  has(viewer: PlayerId, ref: SlotRef): boolean {
-    return this.granted.has(key(viewer, ref));
+  has(ref: SlotRef): boolean {
+    return this.granted.has(key(ref));
   }
 
-  isLooking(viewer: PlayerId, ref: SlotRef): boolean {
-    return this.looking.has(key(viewer, ref));
+  isLooking(ref: SlotRef): boolean {
+    return this.looking.has(key(ref));
   }
 
-  beginLook(viewer: PlayerId, ref: SlotRef): boolean {
-    const k = key(viewer, ref);
+  beginLook(ref: SlotRef): boolean {
+    const k = key(ref);
     if (!this.granted.has(k)) return false;
     this.looking.add(k);
     return true;
   }
 
   /** Looking away consumes the grant: you get one look, as at a real table. */
-  endLook(viewer: PlayerId, ref: SlotRef): void {
-    const k = key(viewer, ref);
+  endLook(ref: SlotRef): void {
+    const k = key(ref);
     if (!this.looking.delete(k)) return;
     this.granted.delete(k);
   }
