@@ -3,6 +3,7 @@ import "./styles/base.css";
 import "./styles/menu.css";
 import "./styles/card.css";
 import "./styles/board.css";
+import "./styles/flight.css";
 import { App } from "./ui/app";
 
 const root = document.querySelector<HTMLElement>("#app");

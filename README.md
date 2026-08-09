@@ -4,9 +4,11 @@ Le jeu de cartes **Cactus** (aussi appelé *Dutch*, *Tamalou*, *Cabo*, *Pablo*),
 jouable **à deux sur un seul téléphone**.
 
 Le téléphone se pose à plat entre les deux joueurs, en mode portrait : chacun voit
-sa moitié à l'endroit, la pioche et la défausse sont au milieu. Les moments privés
-— le coup d'œil initial, la carte piochée, une carte révélée par un pouvoir — se
-regardent en **maintenant le doigt dessus**, la main en coupe autour du téléphone.
+sa moitié à l'endroit, la pioche et la défausse sont au milieu. Chaque joueur a une
+**rangée privée tout au bord de son côté**, le plus loin possible de l'adversaire :
+c'est là qu'arrive la carte qu'on vient de piocher, face visible, et là qu'on
+regarde une carte révélée par un pouvoir — en **maintenant le doigt dessus**, la
+main en coupe autour du téléphone.
 
 Aucun compte, aucun serveur, aucune connexion : l'application est un fichier
 statique qui tourne hors ligne, et s'installe depuis Safari via
@@ -18,7 +20,8 @@ statique qui tourne hors ligne, et s'installe depuis Safari via
 |---|---|
 | **Toucher** | Poser la carte piochée · choisir la cible d'un pouvoir |
 | **Maintenir** | Regarder une carte à laquelle tu as droit — elle se cache dès que tu relâches |
-| **Glisser vers le centre** | Défausse rapide |
+| **Glisser vers le centre** | Défausse rapide — la carte suit le doigt |
+| **Toucher la carte piochée** | La recacher : elle arrive face visible, et un adversaire curieux se penche |
 
 ## Développement
 

@@ -41,11 +41,13 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  /* In the player's own reading direction: plate, tray, then cards nearest
-     their own edge, where a hand can shield them. The cards take whatever is
-     left and size themselves to it — never the other way round, or a tall
-     layout gets cropped by the fixed viewport. */
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* In the player's own reading direction: plate, then the cards, then the tray
+     hard against their own edge. The tray is the private row — the card just
+     drawn, face up — so it belongs at the edge furthest from the opponent,
+     where a hand can shield it; it also puts "Défausser" under the thumb. The
+     cards take whatever is left and size themselves to it — never the other way
+     round, or a tall layout gets cropped by the fixed viewport. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 6px;
 }
 
@@ -58,11 +60,11 @@
   grid-row: 1;
 }
 
-.rotor > .tray {
+.rotor > .layout {
   grid-row: 2;
 }
 
-.rotor > .layout {
+.rotor > .tray {
   grid-row: 3;
 }
 
@@ -132,8 +134,10 @@
   gap: 6px;
 }
 
+/* Bigger than a slot card would need to be: this is the card the player is
+   actually reading, and it is only ever one. */
 .card--tray {
-  width: clamp(38px, 12vw, 52px);
+  width: clamp(48px, 16vw, 68px);
 }
 
 .tray__label {

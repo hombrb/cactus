@@ -83,6 +83,102 @@ class Peer {
 
 const eventsOf = (message) => (message.t === "update" ? message.events : []);
 
+/** Every rank a power, so the first discard of the round is always the one wanted. */
+const ALL_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+const everyRank = (kind) => Object.fromEntries(ALL_RANKS.map((rank) => [rank, kind]));
+
+/**
+ * A power aimed at somebody else's card, over the wire.
+ *
+ * This is the case a room could not reach at all until the board stopped gating
+ * slot input on "is this seat mine": `PEEK_OPPONENT` needs a target in the other
+ * player's half (docs/06 §4), and with one seat per device that half belongs to
+ * nobody here. The authority always accepted it — nothing was ever wired to send
+ * it — so this check is what keeps the two ends honest.
+ *
+ * The room is created with every rank mapped to `PEEK_OPPONENT`, which is a
+ * choice the host is allowed to make (`RoomSettings.powers`, allow-listed by
+ * `parsePowerMap`). Rooms mint their own seed, so this is how the check is made
+ * deterministic without a back door into the deal.
+ */
+async function checkOpponentPower() {
+  const created = await fetch(`${ORIGIN}/api/room`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      preset: "standard",
+      snap: false, // no snap grace buffer to wait on
+      scoreLimit: 100,
+      powers: everyRank("PEEK_OPPONENT"),
+      seedDiscard: true,
+      takeFromDiscard: true,
+    }),
+  });
+  const { code } = await created.json();
+
+  const a = new Peer(code, "power-a", "Alice");
+  await a.open();
+  await a.next((m) => m.t === "welcome", "welcome for A");
+  const b = new Peer(code, "power-b", "Bob");
+  await b.open();
+  await b.next((m) => m.t === "welcome", "welcome for B");
+
+  a.send({ type: "StartMatch", playerId: "power-a" });
+  await a.next((m) => eventsOf(m).some((e) => e.type === "MatchStarted"), "match start");
+  a.send({ type: "PeekInitial", playerId: "power-a", slots: [0, 1] });
+  b.send({ type: "PeekInitial", playerId: "power-b", slots: [0, 1] });
+
+  const live = await a.next(
+    (m) => m.t === "update" && m.view.phase === "TURN_START",
+    "first turn",
+  );
+  const current = live.view.currentPlayer;
+  const actor = current === "power-a" ? a : b;
+  const victim = current === "power-a" ? b : a;
+
+  actor.send({ type: "DrawStock", playerId: current });
+  await actor.next((m) => m.t === "update" && m.view.phase === "AWAIT_HELD_DECISION", "held");
+  actor.send({ type: "DiscardHeld", playerId: current });
+  const fired = await actor.next(
+    (m) => m.t === "update" && m.view.phase === "POWER_AWAIT_OPPONENT_SLOT",
+    "power pending",
+  );
+  check(
+    fired.view.pendingPower?.kind === "PEEK_OPPONENT",
+    "a discarded card fires a power that must be aimed at an opponent",
+  );
+
+  // The move the board could not make: a target in the other player's half.
+  actor.send({
+    type: "PowerTarget",
+    playerId: current,
+    target: { playerId: victim.playerId, slot: 2 },
+  });
+  const revealed = await actor.next(
+    (m) => eventsOf(m).some((e) => e.type === "CardRevealed"),
+    "the reveal",
+  );
+  const mine = eventsOf(revealed).find((e) => e.type === "CardRevealed");
+  check(mine.ref.playerId === victim.playerId, "the actor may target the opponent's slot");
+  check(mine.cardId !== HIDDEN, "and is shown the card");
+  check(
+    revealed.view.phase === "TURN_END",
+    "the power resolves rather than expiring on the turn clock",
+  );
+
+  const theirs = await victim.next(
+    (m) => eventsOf(m).some((e) => e.type === "CardRevealed"),
+    "the victim's copy",
+  );
+  check(
+    eventsOf(theirs).find((e) => e.type === "CardRevealed").cardId === HIDDEN,
+    "the victim learns the slot was looked at, never the card (docs/06 §9)",
+  );
+
+  a.close();
+  b.close();
+}
+
 async function main() {
   // --- the assets binding still serves the game --------------------------
   const page = await fetch(`${ORIGIN}/`);
@@ -229,6 +325,8 @@ async function main() {
 
   a.close();
   back.close();
+
+  await checkOpponentPower();
 
   console.log(failures === 0 ? "\nroom checks passed" : `\n${failures} room check(s) failed`);
   process.exit(failures === 0 ? 0 : 1);

@@ -3,6 +3,11 @@
   aspect-ratio: var(--card-ratio);
   border-radius: var(--card-radius);
   background: var(--card-face);
+  /* A card is dragged toward the middle to snap it, and `manipulation` (on body)
+     still lets the browser claim a vertical drag as a pan and cancel the
+     pointer. Nothing is lost: the board never scrolls and zoom is off. Static,
+     not set at drag start — the value is read when the gesture begins. */
+  touch-action: none;
   box-shadow:
     0 1px 1px rgba(0, 0, 0, 0.28),
     0 6px 14px rgba(0, 0, 0, 0.22);
@@ -69,22 +74,40 @@
   color: var(--suit-red);
 }
 
-/* --- back ------------------------------------------------------------- */
+/* --- back -------------------------------------------------------------
+   A real card back is not a texture applied to the whole card: it is a printed
+   panel sitting inside an unprinted margin, which is what stops a slightly
+   miscut card from showing a dark edge. So the card keeps its cream face and
+   `::before` carries the red panel — the lattice, the medallion and the
+   vignette, all layered gradients like everything else here.
+
+   `::before` and not `::after`: the grant pulse owns `::after` (below). */
 
 .card[data-face="back"] {
+  background: var(--card-back-edge);
+  border: 1px solid var(--card-face-edge);
+}
+
+.card[data-face="back"]::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: calc(var(--card-radius) - 3px);
+  border: 1px solid rgba(255, 232, 214, 0.34);
   background:
-    repeating-linear-gradient(
-      45deg,
-      transparent 0 6px,
-      rgba(143, 212, 180, 0.16) 6px 7px
+    /* the medallion, and the darkening towards the corners */
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 232, 214, 0.22) 0 8%,
+      transparent 9% 15%,
+      rgba(255, 232, 214, 0.16) 16% 17%,
+      transparent 18%
     ),
-    repeating-linear-gradient(
-      -45deg,
-      transparent 0 6px,
-      rgba(143, 212, 180, 0.16) 6px 7px
-    ),
+    radial-gradient(120% 90% at 50% 50%, transparent 38%, var(--card-back-deep) 100%),
+    /* the lattice: two crossing rules make a diamond grid */
+    repeating-linear-gradient(45deg, transparent 0 4px, var(--card-back-ink) 4px 5px),
+    repeating-linear-gradient(-45deg, transparent 0 4px, var(--card-back-ink) 4px 5px),
     var(--card-back);
-  border: 1px solid rgba(143, 212, 180, 0.22);
 }
 
 .card[data-face="back"] .card__corner,

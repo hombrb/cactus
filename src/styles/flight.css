@@ -1,0 +1,56 @@
+/* Cards in the air — see src/ui/game/flight.ts for why they travel in a layer of
+   their own rather than moving in place. */
+
+.flights {
+  position: fixed;
+  inset: 0;
+  /* Never in the way of a gesture: the real card underneath keeps the pointer. */
+  pointer-events: none;
+}
+
+.card--flight {
+  position: absolute;
+  transform-origin: 50% 50%;
+  /* The layer animates transform itself, frame by frame. `.card`'s own
+     transition would fight every keyframe. */
+  transition: none;
+  will-change: transform;
+}
+
+.card--flight[data-drag="1"] {
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.34),
+    0 22px 34px rgba(0, 0, 0, 0.34);
+}
+
+/* A card whose movement is currently being drawn by a clone.
+
+   `opacity`, deliberately, and not one of the obvious alternatives:
+     - `visibility: hidden` can drop the pointer capture of a card being dragged;
+     - `hidden` / `display: none` collapses the grid track the card sizes, which
+       is the failure that once turned every card into a 2px sliver — and it
+       would quietly disable the screenshot gate's clipped-card assertion by
+       zeroing the rect.
+   The box stays, the hit testing stays, only the ink goes. */
+.card[data-flying="1"] {
+  opacity: 0;
+  transition: none;
+}
+
+/* A snap that did not match: the card was shown to the table and put back. */
+.card[data-shake="1"] {
+  animation: shake var(--base) var(--ease) 2;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
