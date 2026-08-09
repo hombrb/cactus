@@ -51,3 +51,7 @@ partie rejouable — et ce qui permettra d'ajouter plus tard des salons en ligne
 sans y toucher.
 
 **La spécification commence ici : [`docs/README.md`](docs/README.md).**
+
+La prochaine étape — le jeu sur plusieurs appareils — est préparée dans
+[`HANDOVER.md`](HANDOVER.md) : état des lieux, décisions déjà prises, ordre des
+travaux et pièges à éviter.
