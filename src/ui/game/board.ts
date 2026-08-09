@@ -59,8 +59,13 @@ export class Board {
 
     // Flat table is a two-sided layout by construction. Three-to-eight players
     // is a different board, not a wider one — see HANDOVER phase 5.
+    //
+    // With one seat, that seat takes the bottom: your own cards belong at your
+    // edge. With two, the dealing order decides, which is what the screenshots
+    // were taken against.
     const view = this.primaryView();
-    const [bottomId, topId] = [view.turnOrder[0]!, view.turnOrder[1]!];
+    const bottomId = client.seats.length === 1 ? client.seats[0]! : view.turnOrder[0]!;
+    const topId = view.turnOrder.find((id) => id !== bottomId)!;
 
     root.innerHTML = `
       <div class="board">
