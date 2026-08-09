@@ -11,7 +11,7 @@ is French and must stay French.
 | | |
 |---|---|
 | Repo | `hombrb/cactus`, branch `claude/reprise-handover-ewoyce` |
-| Last commit | the one that added `worker/` and `src/net/` |
+| Last commit | the iOS card-layout fix |
 | What works today | A complete 2-player game on one shared phone, **and** a working server-authoritative room behind a join code. |
 | What is missing | Any way for a human to *reach* the room. There is no lobby screen, so the networked path is exercised only by tests. |
 | Engine | `src/engine/`, pure, framework-free |
@@ -25,7 +25,7 @@ npm run dev                       # dev server
 npm test                          # 42 tests, ~4 s
 npm run build                     # typecheck (app + worker) + vite build
 npm run preview                   # needed by the two scripts below
-npm run shots                     # drives Chromium at 390×844, fails on clipped cards
+npm run shots                     # Chromium at 390×844, fails on clipped cards — Chromium ONLY
 npm run check:pwa                 # manifest, iOS metas, genuine offline reload
 npm run verify                    # all of the above
 
@@ -73,12 +73,13 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 
 - **There is no lobby UI.** This is the whole of phase 4 below and it is the
   only thing between here and a real networked game.
-- **Nothing is deployed.** `wrangler.toml` is written and correct, but no
-  Cloudflare account has been named. See §7.
+- **Deployed to a `workers.dev` subdomain**, by hand. No Git-connected build
+  and no custom domain yet — see §7.
 - `snap.allowOnOpponent` and the Ace `GIVE_CARD` power remain implemented,
   off by default, and never exercised in a real game. Still untested.
 - The board is still a two-sided flat table. 3–8 players is phase 5.
-- No CI. The two commands above are the gate.
+- No CI. The two commands above are the gate, and neither of them can see
+  Safari — see trap 12.
 
 ---
 
@@ -134,8 +135,9 @@ an authenticated Cloudflare account. See §7.
 
 ## 5. Traps that will bite
 
-The first four are new this session. The rest cost real debugging time before it
-and are still live.
+The first four came out of the network work, and 11-12 out of a card layout that
+looked perfect in Chromium and was unusable on an iPhone. The rest cost real
+debugging time before this session and are still live.
 
 1. **A hibernating Durable Object loses everything in memory while its sockets
    stay open.** Hence: the snapshot is persisted after every action, an open
@@ -169,13 +171,27 @@ and are still live.
    the rule to make them pass, you have disabled the sweep.
 10. **`discardVersion` restarts at 1 every deal.** Monotonic *within* a round
     only, and it does not track the discard's size.
-11. **The service worker does not control the page that registered it.** Hence
+11. **WebKit will not derive a grid track's width from its item's height.**
+    `grid-template-columns: auto` with `height: 100%` cards and `aspect-ratio`
+    is circular — the track wants the card's intrinsic width, which comes from
+    its height, which comes from the track. Chromium resolves it; **iOS Safari
+    takes the contribution as zero and collapses every card to a 2px sliver**,
+    which shipped to a real phone while every Chromium screenshot stayed clean.
+    `.layout` is now a `container-type: size` container and the tracks are plain
+    `cqh`/`cqw` lengths, so nothing in a track depends on its card. Do not put
+    `auto` tracks back.
+12. **`npm run shots` only drives Chromium, so it cannot catch trap 11.**
+    There is no WebKit binary in `/opt/pw-browsers`. Until there is, anything
+    touching `board.css` or `card.css` needs a look on a real iPhone before it
+    is called done — the gate passing is not evidence for Safari.
+13. **The service worker does not control the page that registered it.** Hence
     the build-time precache plugin in `vite.config.ts`. And `caches.match` needs
     `ignoreVary: true`. Do not undo either.
-12. **`overflow: hidden` hides layout bugs from scroll-height checks.**
+14. **`overflow: hidden` hides layout bugs from scroll-height checks.**
     `scripts/shots.mjs` measures card bounding boxes against the viewport for
     exactly this reason. Keep that assertion.
-13. **Cards must size from available height, never fixed width.**
+15. **Cards must size from available height, never fixed width.** A layout
+    grown past four cards by penalties has to shrink, not overflow.
     `src/styles/board.css`.
 
 ---

@@ -148,7 +148,7 @@ export class Board {
           <div class="tray__slot"><span class="tray__label"></span></div>
           <div class="tray__actions"></div>
         </div>
-        <div class="layout"></div>
+        <div class="layout"><div class="layout__grid"></div></div>
       </div>
     `;
 
@@ -169,7 +169,9 @@ export class Board {
       trayCard,
       trayLabel: root.querySelector<HTMLElement>(".tray__label")!,
       actions: root.querySelector<HTMLElement>(".tray__actions")!,
-      layout: root.querySelector<HTMLElement>(".layout")!,
+      // The grid, not its container: .layout is the size container the track
+      // widths are measured against, so it must stay free of the cards.
+      layout: root.querySelector<HTMLElement>(".layout__grid")!,
       slots: [],
     };
 
