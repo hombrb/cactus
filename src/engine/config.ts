@@ -1,7 +1,7 @@
 // Rule presets — see docs/02-rule-config.md
 // No rule constant may appear as a literal anywhere else in the engine.
 
-import type { RuleConfig } from "./types";
+import type { PowerKind, PowerMap, RankKey, RuleConfig } from "./types";
 
 export const standard: RuleConfig = {
   deck: {
@@ -12,6 +12,7 @@ export const standard: RuleConfig = {
     initialPeekCount: 2,
     initialPeekFree: false,
     reshuffleDiscard: true,
+    seedDiscard: true,
   },
   values: {
     joker: -1,
@@ -35,6 +36,9 @@ export const standard: RuleConfig = {
     },
     aceGiveEnabled: false,
     misusePenaltyCards: 1,
+  },
+  turn: {
+    takeFromDiscard: true,
   },
   snap: {
     enabled: true,
@@ -111,6 +115,61 @@ export function forTable(base: RuleConfig, snapEnabled: boolean): RuleConfig {
   };
 }
 
+// ---------------------------------------------------------------------------
+// The power map as a *choosable* thing.
+//
+// `powers.map` has always been free-form data, but nothing could be trusted to
+// build one: a client that could post an arbitrary map could invent a rule. So
+// both the rank keys and the power kinds are allow-listed here, once, and both
+// `src/ui/settings.ts` and `src/net/room-config.ts` go through `parsePowerMap`.
+// The client therefore sends a rank and a power, never a `RuleConfig`.
+// ---------------------------------------------------------------------------
+
+/** Every rank a power may be attached to, in display order. */
+export const POWER_RANK_KEYS: readonly RankKey[] = [
+  "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K:red", "K:black",
+];
+
+/**
+ * The powers a player may assign.
+ *
+ * `GIVE_CARD` is deliberately absent: it is implemented but has never been
+ * exercised in a real game (HANDOVER §2), and a settings screen is not the
+ * place to ship untested rules. `powers.aceGiveEnabled` still gates it for any
+ * config built in code.
+ */
+export const SELECTABLE_POWERS: readonly PowerKind[] = [
+  "NONE", "PEEK_OWN", "PEEK_OPPONENT", "BLIND_SWAP", "LOOK_AND_SWAP",
+];
+
+/**
+ * Never throws. Unknown ranks and unknown powers are dropped rather than
+ * rejected, so an old client, a hand-edited localStorage or a hostile POST body
+ * degrades to fewer powers instead of to an error.
+ *
+ * Returns `null` when there is nothing usable — which every caller reads as
+ * "keep the preset's own map".
+ */
+export function parsePowerMap(raw: unknown): PowerMap | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: Record<RankKey, PowerKind> = {};
+  let seen = false;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!POWER_RANK_KEYS.includes(key)) continue;
+    if (typeof value !== "string") continue;
+    if (!SELECTABLE_POWERS.includes(value as PowerKind)) continue;
+    out[key] = value as PowerKind;
+    seen = true;
+  }
+  return seen ? out : null;
+}
+
+/** Applies a chosen power map, or leaves the config's own map alone. */
+export function withPowerMap(cfg: RuleConfig, map: PowerMap | null): RuleConfig {
+  if (map === null) return cfg;
+  return { ...cfg, powers: { ...cfg.powers, map } };
+}
+
 export function validateConfig(cfg: RuleConfig): string[] {
   const errors: string[] = [];
   if (cfg.deck.handSize < 2) errors.push("handSize must be >= 2");
@@ -122,5 +181,7 @@ export function validateConfig(cfg: RuleConfig): string[] {
   const hasGive = Object.values(cfg.powers.map).includes("GIVE_CARD");
   if (hasGive && !cfg.powers.aceGiveEnabled)
     errors.push("GIVE_CARD is mapped but aceGiveEnabled is false");
+  for (const key of Object.keys(cfg.powers.map))
+    if (!POWER_RANK_KEYS.includes(key)) errors.push(`powers.map has an unknown rank key: ${key}`);
   return errors;
 }

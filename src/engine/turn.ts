@@ -1,6 +1,7 @@
 // Match setup, dealing and turn actions — see docs/05-engine-core.md
 
 import { buildDeck, cardTable, powerFor } from "./cards";
+import { validateConfig } from "./config";
 import { canRefillStock, ensureStock } from "./deck";
 import { phaseForPower } from "./powers";
 import { shuffle } from "./rng";
@@ -38,6 +39,17 @@ export interface MatchSetup {
 }
 
 export function createMatch(setup: MatchSetup): GameState {
+  // Configs used to come only from `presets`, so nothing ever called
+  // `validateConfig`. They are now assembled from user choices, so the one
+  // place every match passes through checks them. Same DEV-only cast as
+  // `applyAction`: the engine also compiles inside the worker.
+  if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+    const problems = validateConfig(setup.config);
+    if (problems.length > 0) {
+      throw new Error(`invalid rule config: ${problems.join("; ")}`);
+    }
+  }
+
   const players: PlayerState[] = setup.players.map((p) => ({
     id: p.id,
     name: p.name,
@@ -125,7 +137,11 @@ export function createRound(
     return { ...p, layout, hasPeeked: false, roundScore: null };
   });
 
-  const seedCard = order[cursor++]!;
+  // Some tables start on an empty discard and only ever discard what has been
+  // played — the French schoolyard version does (docs/01 §2). Nothing else in
+  // the round changes: `validateSnap` already rejects DISCARD_EMPTY, so the
+  // first player simply has nothing to snap or to take.
+  const seedCard = cfg.deck.seedDiscard ? order[cursor++]! : null;
   const stock = order.slice(cursor);
 
   const state: GameState = {
@@ -133,8 +149,9 @@ export function createRound(
     cards,
     players,
     stock,
-    discard: [seedCard],
+    discard: seedCard === null ? [] : [seedCard],
     // Starts at 1, never 0, so a client with no state yet cannot match it.
+    // True with an empty discard too: the version counts changes, not cards.
     discardVersion: 1,
     heldCard: null,
     pendingPower: null,
@@ -163,7 +180,9 @@ export function createRound(
       { type: "CardsDealt", deals },
       // The seeded discard card has no power: powers fire only on a card drawn
       // from the stock and discarded (docs/05 §3).
-      { type: "DiscardSeeded", cardId: seedCard },
+      ...(seedCard === null
+        ? []
+        : [{ type: "DiscardSeeded", cardId: seedCard } as const]),
     ],
   };
 }
@@ -272,6 +291,9 @@ export function onDrawStock(
 }
 
 export function validateTakeDiscard(s: GameState, a: Action & { type: "TakeDiscard" }): Verdict {
+  // Every source consulted allows this (docs/01 §4B), but some tables play
+  // stock-only, so it is a rule rather than a constant.
+  if (!s.config.turn.takeFromDiscard) return reject("TAKE_DISCARD_DISABLED");
   if (s.phase !== "TURN_START") return reject("WRONG_PHASE");
   if (currentPlayerId(s) !== a.playerId) return reject("NOT_YOUR_TURN");
   if (s.discard.length === 0) return reject("DISCARD_EMPTY");

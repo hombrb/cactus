@@ -9,6 +9,7 @@ import { HIDDEN } from "../src/engine/project";
 import { nearestSlots } from "../src/engine/turn";
 import type { Event, PlayerId } from "../src/engine/types";
 import { RoomCore, type RoomEffects, type RoomSnapshot } from "../src/net/room-core";
+import { configForRoom, parseRoomSettings } from "../src/net/room-config";
 import type { ServerMessage } from "../src/net/protocol";
 import { CARD_ID, stringLeaves } from "./helpers";
 
@@ -305,6 +306,34 @@ describe("hibernation", () => {
 
     const effects = revived.submit(current, { type: "DiscardHeld", playerId: current }, at + 1);
     expect(eventsFor(effects, current).some((e) => e.type === "HeldDiscarded")).toBe(true);
+  });
+
+  it("keeps the host's chosen rules across the nap", () => {
+    // The rules are minted once at creation and then live only in the
+    // persisted state. A guest reconnecting after an eviction must still be
+    // told the variant they are playing, not the preset.
+    const config = configForRoom(
+      parseRoomSettings({
+        powers: { "7": "PEEK_OWN", J: "PEEK_OPPONENT" },
+        seedDiscard: false,
+        takeFromDiscard: false,
+      }),
+    );
+    const room = new RoomCore(EMPTY, { config, seed: "custom-rules" });
+    room.join("a", "A", 0);
+    room.join("b", "B", 0);
+    room.submit("a", { type: "StartMatch", playerId: "a" }, 0);
+
+    expect(room.view("b")!.discard).toEqual([]);
+
+    const revived = new RoomCore(
+      JSON.parse(JSON.stringify(room.snapshot())) as RoomSnapshot,
+      { config, seed: "custom-rules" },
+    );
+    const view = revived.view("b")!;
+    expect(view.config.powers.map).toEqual({ "7": "PEEK_OWN", J: "PEEK_OPPONENT" });
+    expect(view.config.deck.seedDiscard).toBe(false);
+    expect(view.config.turn.takeFromDiscard).toBe(false);
   });
 
   it("keeps an open snap buffer across the nap", () => {

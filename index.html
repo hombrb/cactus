@@ -6,7 +6,9 @@
     <meta name="description" content="Le jeu de cartes Cactus, à deux sur un téléphone." />
 
     <!-- viewport-fit=cover lets the board reach under the notch and home indicator;
-         padding is restored per-side with env(safe-area-inset-*). -->
+         padding is restored per-side with env(safe-area-inset-*). The felt
+         itself is painted on the root element so it also covers whatever iOS
+         leaves outside the layout viewport — see src/styles/base.css. -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"

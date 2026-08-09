@@ -51,6 +51,26 @@ if (!viewport?.includes("viewport-fit=cover")) problems.push("viewport lacks vie
 const touchIcon = await page.getAttribute('link[rel="apple-touch-icon"]', "href");
 if (!touchIcon) problems.push("no apple-touch-icon");
 
+// --- the felt must be on the canvas --------------------------------------
+// In a standalone iOS web app, anything the page does not paint is filled by
+// the canvas — i.e. by the ROOT element's background. Painting the felt on
+// #app instead left that strip a flat, darker colour and produced a visible
+// bar along the bottom of the screen. Chromium cannot reproduce the strip, but
+// it can check the two properties that make it impossible.
+const canvas = await page.evaluate(() => {
+  const root = getComputedStyle(document.documentElement);
+  return {
+    rootImage: root.backgroundImage,
+    rootColor: root.backgroundColor,
+    bodyColor: getComputedStyle(document.body).backgroundColor,
+  };
+});
+if (canvas.rootImage === "none") problems.push("the felt is not painted on the root element");
+if (/^(transparent|rgba\(0, 0, 0, 0\))$/.test(canvas.rootColor))
+  problems.push("the root has no background-color to fill the canvas beyond the gradient");
+if (!/^(transparent|rgba\(0, 0, 0, 0\))$/.test(canvas.bodyColor))
+  problems.push(`body paints ${canvas.bodyColor} over the root's felt`);
+
 // --- service worker + offline --------------------------------------------
 const registered = await page.evaluate(async () => {
   if (!("serviceWorker" in navigator)) return false;

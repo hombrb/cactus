@@ -22,7 +22,7 @@ export function candidates(s: GameState): Action[] {
       break;
     case "TURN_START":
       out.push({ type: "DrawStock", playerId: me });
-      out.push({ type: "TakeDiscard", playerId: me });
+      if (s.config.turn.takeFromDiscard) out.push({ type: "TakeDiscard", playerId: me });
       break;
     case "AWAIT_HELD_DECISION":
       out.push({ type: "DiscardHeld", playerId: me });

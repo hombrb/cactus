@@ -9,6 +9,7 @@ import { CODE_LENGTH, normaliseRoomCode } from "../../net/protocol";
 import type { RoomSettings } from "../../net/room-config";
 import { loadIdentity } from "../identity";
 import { RemoteClient } from "../remote-client";
+import { summariseRules } from "../rules-text";
 
 export interface LobbyActions {
   /** Called once the match starts; the app swaps in the board. */
@@ -59,6 +60,7 @@ export function renderLobby(root: HTMLElement, actions: LobbyActions): () => voi
         <p class="lobby__codelabel">Code de la partie</p>
         <p class="lobby__code" data-role="code"></p>
         <p class="lobby__hint">Donne ce code à l'autre joueur.</p>
+        <ul class="lobby__rules" data-role="rules"></ul>
         <ul class="lobby__players" data-role="players"></ul>
         <button class="btn btn--big" data-kind="accent" type="button" data-act="start" hidden>
           Démarrer
@@ -76,6 +78,7 @@ export function renderLobby(root: HTMLElement, actions: LobbyActions): () => voi
   const errorEl = root.querySelector<HTMLElement>('[data-role="error"]')!;
   const codeEl = root.querySelector<HTMLElement>('[data-role="code"]')!;
   const playersEl = root.querySelector<HTMLElement>('[data-role="players"]')!;
+  const rulesEl = root.querySelector<HTMLElement>('[data-role="rules"]')!;
   const waitEl = root.querySelector<HTMLElement>('[data-role="wait"]')!;
   const startBtn = root.querySelector<HTMLButtonElement>('[data-act="start"]')!;
   const createBtn = root.querySelector<HTMLButtonElement>('[data-act="create"]')!;
@@ -152,6 +155,15 @@ export function renderLobby(root: HTMLElement, actions: LobbyActions): () => voi
       unsubscribe = null;
       actions.onPlay(started);
       return;
+    }
+
+    // The host's settings became the room's rules; everyone else has a right to
+    // know which ones before the first card is dealt.
+    rulesEl.innerHTML = "";
+    for (const chip of summariseRules(view.config)) {
+      const li = document.createElement("li");
+      li.textContent = chip;
+      rulesEl.append(li);
     }
 
     playersEl.innerHTML = "";

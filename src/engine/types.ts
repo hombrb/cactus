@@ -111,6 +111,8 @@ export interface DeckConfig {
   readonly initialPeekCount: number;
   readonly initialPeekFree: boolean;
   readonly reshuffleDiscard: boolean;
+  /** Turn the stock's top card face up at the deal. False starts on an empty discard. */
+  readonly seedDiscard: boolean;
 }
 
 export interface ValueConfig {
@@ -125,10 +127,17 @@ export interface ValueConfig {
 /** Keys are ranks, optionally colour-qualified: "7", "J", "K:black", "K:red". */
 export type RankKey = string;
 
+export type PowerMap = Readonly<Record<RankKey, PowerKind>>;
+
 export interface PowerConfig {
-  readonly map: Readonly<Record<RankKey, PowerKind>>;
+  readonly map: PowerMap;
   readonly aceGiveEnabled: boolean;
   readonly misusePenaltyCards: number;
+}
+
+export interface TurnConfig {
+  /** May a player take the top of the discard instead of drawing? */
+  readonly takeFromDiscard: boolean;
 }
 
 export interface SnapConfig {
@@ -177,6 +186,7 @@ export interface RuleConfig {
   readonly deck: DeckConfig;
   readonly values: ValueConfig;
   readonly powers: PowerConfig;
+  readonly turn: TurnConfig;
   readonly snap: SnapConfig;
   readonly announce: AnnounceConfig;
   readonly scoring: ScoringConfig;

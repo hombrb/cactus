@@ -5,11 +5,12 @@ import { LocalClient, type GameClient } from "./client";
 import { Board } from "./game/board";
 import { renderLobby } from "./screens/lobby";
 import { renderMenu } from "./screens/menu";
+import { renderPowers } from "./screens/powers";
 import { renderRules } from "./screens/rules";
 import { renderSettings } from "./screens/settings";
 import { configFrom, loadSettings, saveSettings, type Settings } from "./settings";
 
-type Screen = "menu" | "rules" | "settings" | "lobby" | "game";
+type Screen = "menu" | "rules" | "settings" | "powers" | "lobby" | "game";
 
 export class App {
   private settings: Settings = loadSettings();
@@ -36,18 +37,25 @@ export class App {
         break;
 
       case "rules":
-        renderRules(this.root, this.settings, () => this.go("menu"));
+        renderRules(this.root, configFrom(this.settings), () => this.go("menu"));
         break;
 
       case "settings":
         renderSettings(
           this.root,
           this.settings,
-          (next) => {
-            this.settings = next;
-            saveSettings(next);
-          },
+          (next) => this.update(next),
+          () => this.go("powers"),
           () => this.go("menu"),
+        );
+        break;
+
+      case "powers":
+        renderPowers(
+          this.root,
+          configFrom(this.settings).powers.map,
+          (powers) => this.update({ ...this.settings, powers }),
+          () => this.go("settings"),
         );
         break;
 
@@ -72,7 +80,15 @@ export class App {
       preset: this.settings.preset,
       snap: this.settings.snap,
       scoreLimit: this.settings.scoreLimit,
+      powers: this.settings.powers,
+      seedDiscard: this.settings.seedDiscard,
+      takeFromDiscard: this.settings.takeFromDiscard,
     };
+  }
+
+  private update(next: Settings): void {
+    this.settings = next;
+    saveSettings(next);
   }
 
   private teardown(): void {
