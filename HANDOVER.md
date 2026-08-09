@@ -1,6 +1,6 @@
-# Handover — next session: the lobby
+# Handover — next session: more than two players, and a real deploy
 
-Written at the end of the session that shipped the room authority. Read this
+Written at the end of the session that shipped the lobby. Read this
 before touching anything. It is in English like `docs/` and the code; the *app*
 is French and must stay French.
 
@@ -11,9 +11,9 @@ is French and must stay French.
 | | |
 |---|---|
 | Repo | `hombrb/cactus`, branch `claude/reprise-handover-ewoyce` |
-| Last commit | the iOS card-layout fix |
-| What works today | A complete 2-player game on one shared phone, **and** a working server-authoritative room behind a join code. |
-| What is missing | Any way for a human to *reach* the room. There is no lobby screen, so the networked path is exercised only by tests. |
+| Last commit | the lobby |
+| What works today | A complete 2-player game **on one shared phone or on two phones**, joined by a six-character code. End to end. |
+| What is missing | More than two players, and a Git-connected deploy on a real domain. |
 | Engine | `src/engine/`, pure, framework-free |
 | Authority | `src/net/room-core.ts` (all decisions) + `worker/room.ts` (sockets, storage, alarm) |
 | UI | `src/ui/`, no framework, retained DOM, renders from `PlayerView` only |
@@ -30,13 +30,18 @@ npm run check:pwa                 # manifest, iOS metas, genuine offline reload
 npm run verify                    # all of the above
 
 npm run dev:worker                # wrangler dev on :8787, serves dist/ + /api
-npm run check:room                # 23 end-to-end checks against that worker
+npm run check:room                # 24 protocol checks over raw sockets
+npm run check:lobby               # 20 checks driving two browsers through the UI
+npm run check:online              # both of the above
 ```
 
 `npm run verify` is the gate and needs `npm run preview` running.
-`npm run check:room` is separate on purpose — it needs `npm run dev:worker`
+`npm run check:online` is separate on purpose — it needs `npm run dev:worker`
 running, and booting workerd is a heavier dependency than the gate should carry.
-**Run both before committing anything that touches `src/net/` or `worker/`.**
+**Run both before committing anything that touches `src/net/`, `worker/` or the
+online path.** `check:lobby` opens two browser contexts, so two localStorages,
+so two genuinely different players — it is the only test that plays the game the
+way a person does.
 
 `?seed=xxx` on the URL forces a deterministic deal — that is how
 `scripts/shots.mjs` reaches a specific situation.
@@ -65,16 +70,21 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
   Transport-free, so it is tested on a fake clock.
 - **The Durable Object** (`worker/room.ts`): hibernation, persistence after
   every action, alarms, ping/pong latency, socket attachments.
+- **The lobby** (`src/ui/screens/lobby.ts`): create a room with the host's own
+  rules, join by code, player list, host-only start. Identity is
+  `src/ui/identity.ts`.
 - **Tests**: 42 in `npm test` — the 37-step worked trace, the invariant sweep,
-  the projection/wire-format sweep (`tests/projection.test.ts`), and 20 room
-  tests. Plus 23 end-to-end checks in `scripts/check-room.mjs`.
+  the projection/wire-format sweep, and 20 room tests. Plus 24 protocol checks
+  and 20 two-browser checks against a real Durable Object.
 
 ### Known gaps (deliberate, not forgotten)
 
-- **There is no lobby UI.** This is the whole of phase 4 below and it is the
-  only thing between here and a real networked game.
 - **Deployed to a `workers.dev` subdomain**, by hand. No Git-connected build
   and no custom domain yet — see §7.
+- **Rooms are two players.** The lobby's start button unlocks at two and the
+  board is two-sided. Phase 5.
+- **No room TTL.** An abandoned Durable Object idles for free, so this is
+  tidiness rather than cost — but docs/10 §2 promises one.
 - `snap.allowOnOpponent` and the Ace `GIVE_CARD` power remain implemented,
   off by default, and never exercised in a real game. Still untested.
 - The board is still a two-sided flat table. 3–8 players is phase 5.
@@ -87,6 +97,11 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 
 Asked and answered, so do not re-open without a reason:
 
+- **The host picks the rules** at creation, from their own settings. The client
+  sends `preset` / `snap` / `scoreLimit`, never a `RuleConfig`, so it can choose
+  among the game's rules but not invent one.
+- **The online pseudonym is asked in the lobby**, prefilled from settings —
+  otherwise two fresh phones both call themselves "Joueur 1".
 - **Online player count: 2 for now, but designed for N.** So `PlayerView`
   carries `turnOrder` rather than assuming two seats, `endOfRoundPrompt`
   compares against "the best of the others", and the board builds one half per
@@ -101,43 +116,30 @@ Asked and answered, so do not re-open without a reason:
 
 ## 4. The work, in order
 
-**Phase 4 — the lobby. This is the next session's job.**
+**Phase 5 — 3-to-8 players. This is the next session's job.**
 
-Everything under it already exists; what is missing is the screen.
+The engine already supports it (`autoTwoDecksAbove` switches to two decks above
+4) and `PlayerView` no longer assumes two seats. Three things do:
 
-- `POST /api/room` returns a fresh six-character code, already collision-checked
-  against the object that code addresses. Join is
-  `GET /api/room/socket?code=&playerId=&name=`.
-- `RemoteClient.connect({ url, code, playerId, name })` resolves once the room
-  has welcomed the player, so the board never renders empty. Identity comes from
-  `loadIdentity(name)` in `src/ui/identity.ts`.
-- Wanted: create / join by code on the menu, a player list while in `LOBBY`,
-  and a host-only start button. `LobbyJoin` / `LobbyLeave` are exercised by
-  `tests/room.test.ts` now, so they are no longer the unknown they were.
-- **`app.ts` currently hard-codes `p1`/`p2` and two names** (`settings.ts` has
-  exactly two name fields). That is the flat-table path and it can stay, but the
-  online path must not copy it.
-- **The board's rotation is a flat-table assumption.** `.half[data-seat="top"]`
-  rotates its contents 180° because the opponent is sitting opposite. Online,
-  nobody is upside down. The seat *ordering* is already right — with one seat
-  that seat takes the bottom — but the CSS needs a mode switch.
+- `board.ts` builds exactly two halves, top and bottom, from `turnOrder`.
+- `src/styles/board.css` is a two-row grid with one half rotated.
+- `lobby.ts` unlocks its start button at two connected players.
 
-**Phase 5 — 3-to-8 players.** The engine already supports it
-(`autoTwoDecksAbove` switches to two decks above 4) and the view no longer
-assumes two. The UI does not: the board is two rotated halves. A table of N is
-probably opponents as compact strips with your own hand large at the bottom. Do
-not try to widen the flat-table board.
+A table of N is probably opponents as compact strips across the top with your
+own hand large at the bottom — a different board, not a wider one. Do not try to
+stretch the flat table into it. Note the flat table stays two-player either way;
+it is a phone lying between two people.
 
-**Phase 6 — deploy.** `npm run deploy` is `build && wrangler deploy` and wants
+**Phase 6 — deploy properly.** `npm run deploy` is `build && wrangler deploy` and wants
 an authenticated Cloudflare account. See §7.
 
 ---
 
 ## 5. Traps that will bite
 
-The first four came out of the network work, and 11-12 out of a card layout that
-looked perfect in Chromium and was unusable on an iPhone. The rest cost real
-debugging time before this session and are still live.
+1-4 came out of the network work. 11-14 are all layout, and all cost a real
+device or a real second browser to find — they are the ones a passing gate will
+not save you from. The rest predate this session and are still live.
 
 1. **A hibernating Durable Object loses everything in memory while its sockets
    stay open.** Hence: the snapshot is persisted after every action, an open
@@ -184,13 +186,24 @@ debugging time before this session and are still live.
     There is no WebKit binary in `/opt/pw-browsers`. Until there is, anything
     touching `board.css` or `card.css` needs a look on a real iPhone before it
     is called done — the gate passing is not evidence for Safari.
-13. **The service worker does not control the page that registered it.** Hence
+13. **`[hidden]` loses to any author rule that sets `display`.** `.btn` and
+    `.lobby` both do, so `el.hidden = true` was silently ignored — which is how
+    a guest was shown the host's start button and the waiting panel rendered on
+    top of the join form. `base.css` now carries
+    `[hidden] { display: none !important }`. Do not remove it.
+14. **Never hide a child of `.rotor` and let auto-placement re-flow it.** With
+    the tray `display: none` online, `.layout` slid from the `1fr` row up into
+    an `auto` one, its height became indefinite, and every card collapsed to
+    2px — the same symptom as trap 11, from a different cause. The three rows
+    are now pinned with explicit `grid-row`. This was caught by
+    `check:lobby`, not by the gate, because the flat table never hides a tray.
+15. **The service worker does not control the page that registered it.** Hence
     the build-time precache plugin in `vite.config.ts`. And `caches.match` needs
     `ignoreVary: true`. Do not undo either.
-14. **`overflow: hidden` hides layout bugs from scroll-height checks.**
+16. **`overflow: hidden` hides layout bugs from scroll-height checks.**
     `scripts/shots.mjs` measures card bounding boxes against the viewport for
     exactly this reason. Keep that assertion.
-15. **Cards must size from available height, never fixed width.** A layout
+17. **Cards must size from available height, never fixed width.** A layout
     grown past four cards by penalties has to shrink, not overflow.
     `src/styles/board.css`.
 
@@ -222,11 +235,12 @@ debugging time before this session and are still live.
   not have.
 - **Room TTL and cleanup.** docs/10 §2 says rooms die by TTL; nothing implements
   one yet. A Durable Object with no sockets and no alarm simply idles, which
-  costs nothing, so this is a tidiness question rather than a cost one.
+  costs nothing, so this is a tidiness question rather than a cost one. Note a
+  code is claimed at creation and never released, so codes only accumulate.
 - **Spectators / rejoin after a match ends** — still not specified anywhere.
-- **Whether the online game should use `standard` or let the host pick.** The
-  room currently hard-codes `standard` in `worker/room.ts`; the flat table lets
-  you choose a preset in settings.
+- **Whether the lobby should show the rules it is about to use.** The host's
+  settings become the room's rules silently; a guest joining a `school` room is
+  not told. Fine among friends, surprising otherwise.
 
 ---
 

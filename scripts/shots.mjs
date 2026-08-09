@@ -114,7 +114,7 @@ await page.waitForTimeout(150);
 await shot("settings");
 await page.locator('[data-act="back"]').click();
 
-await page.getByRole("button", { name: "Jouer" }).click();
+await page.getByRole("button", { name: "Jouer sur ce téléphone" }).click();
 await page.waitForTimeout(200);
 await shot("initial-peek");
 

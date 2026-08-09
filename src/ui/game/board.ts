@@ -67,8 +67,12 @@ export class Board {
     const bottomId = client.seats.length === 1 ? client.seats[0]! : view.turnOrder[0]!;
     const topId = view.turnOrder.find((id) => id !== bottomId)!;
 
+    // Flat table sits between two people, so one half is upside down. Online
+    // nobody is opposite anybody, and the same rotation would just be wrong.
+    const mode = client.seats.length === 1 ? "remote" : "table";
+
     root.innerHTML = `
-      <div class="board">
+      <div class="board" data-mode="${mode}">
         <section class="half" data-seat="top"></section>
         <div class="middle">
           <button class="pile pile--stock" type="button" aria-label="pioche"></button>
@@ -421,6 +425,18 @@ export class Board {
     revealAll: boolean,
     isCurrent: boolean,
   ): void {
+    // A half this device does not own has no tray: no prompt addressed to
+    // someone else, and above all no private card. The grant lookup below is
+    // written from the *viewer's* side, so on a foreign half it would surface
+    // the viewer's own granted card at the opponent's edge.
+    if (!half.live) {
+      half.prompt.textContent = "";
+      half.trayLabel.textContent = "";
+      half.trayCard.hidden = true;
+      half.actions.innerHTML = "";
+      return;
+    }
+
     const me = view.players.find((p) => p.id === half.playerId)!;
     const buttons: { label: string; kind?: string; run: () => void }[] = [];
     let prompt = "";

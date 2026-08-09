@@ -24,6 +24,8 @@ export interface RemoteOptions {
 
 export class RemoteClient implements GameClient {
   readonly seats: readonly PlayerId[];
+  /** The join code, so the lobby can keep showing it. */
+  readonly code: string;
   private socket: WebSocket | null = null;
   private listeners: ClientListener[] = [];
   private latest: PlayerView;
@@ -37,6 +39,7 @@ export class RemoteClient implements GameClient {
     welcome: PlayerView,
   ) {
     this.seats = [options.playerId];
+    this.code = options.code;
     this.latest = welcome;
     this.adopt(socket);
   }
@@ -45,20 +48,39 @@ export class RemoteClient implements GameClient {
   static connect(options: RemoteOptions): Promise<RemoteClient> {
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(socketUrl(options));
+      let settled = false;
 
-      const fail = (reason: string) => {
-        socket.close();
-        reject(new Error(reason));
-      };
-
-      socket.addEventListener("error", () => fail("CONNECT_FAILED"), { once: true });
-      socket.addEventListener("message", (event: MessageEvent) => {
+      // Every listener here is removed on the first outcome. Leaving the
+      // handshake's listener attached would mean a later `error` frame — a
+      // perfectly ordinary thing for the server to send mid-game — closing the
+      // socket out from under the game.
+      const onMessage = (event: MessageEvent) => {
         const message = decodeServerMessage(String(event.data));
         if (message === null) return;
-        if (message.t === "error") return fail(message.message);
-        if (message.t !== "welcome") return;
-        resolve(new RemoteClient(options, socket, message.view));
-      });
+        if (message.t === "error") return finish(null, message.message);
+        if (message.t === "welcome") finish(message.view, null);
+      };
+      const onError = () => finish(null, "CONNECT_FAILED");
+      const onClose = () => finish(null, "CONNECT_FAILED");
+
+      function finish(view: PlayerView | null, reason: string | null): void {
+        if (settled) return;
+        settled = true;
+        socket.removeEventListener("message", onMessage);
+        socket.removeEventListener("error", onError);
+        socket.removeEventListener("close", onClose);
+
+        if (view === null) {
+          socket.close();
+          reject(new Error(reason ?? "CONNECT_FAILED"));
+          return;
+        }
+        resolve(new RemoteClient(options, socket, view));
+      }
+
+      socket.addEventListener("message", onMessage);
+      socket.addEventListener("error", onError);
+      socket.addEventListener("close", onClose);
     });
   }
 

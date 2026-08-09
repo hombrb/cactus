@@ -23,25 +23,35 @@ const json = (body: unknown, status = 200): Response =>
   });
 
 /**
- * Mints a code and asks the object that code addresses whether it is already in
- * use, retrying on collision. With a 32-character alphabet over six characters
- * the space is ~10^9, so this practically never loops — but "practically never"
- * is not "never", and handing two groups the same room is not recoverable.
+ * Mints a code and asks the object that code addresses to claim it, retrying on
+ * collision. With a 32-character alphabet over six characters the space is
+ * ~10^9, so this practically never loops — but "practically never" is not
+ * "never", and handing two groups the same room is not recoverable.
+ *
+ * Claiming and checking are the same call on purpose: a probe followed by a
+ * separate write would leave a window in which two creators both see a free
+ * code. The object is single-threaded, so `create` is atomic.
  */
-async function mintCode(env: Env, url: URL): Promise<string | null> {
+async function mintCode(env: Env, url: URL, body: string): Promise<string | null> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const bytes = new Uint8Array(CODE_BYTES);
     crypto.getRandomValues(bytes);
     const code = makeRoomCode(bytes);
 
-    const probe = new URL(url.origin);
-    probe.pathname = "/api/room/socket";
-    probe.searchParams.set("code", code);
-    probe.searchParams.set("probe", "1");
+    const claim = new URL(url.origin);
+    claim.pathname = "/api/room/socket";
+    claim.searchParams.set("code", code);
+    claim.searchParams.set("create", "1");
 
-    const response = await env.ROOM.get(env.ROOM.idFromName(code)).fetch(probe.toString());
-    const body = (await response.json()) as { exists?: boolean };
-    if (body.exists !== true) return code;
+    const response = await env.ROOM.get(env.ROOM.idFromName(code)).fetch(
+      new Request(claim.toString(), {
+        method: "POST",
+        body,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const result = (await response.json()) as { created?: boolean };
+    if (result.created === true) return code;
   }
   return null;
 }
@@ -51,7 +61,10 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/room" && request.method === "POST") {
-      const code = await mintCode(env, url);
+      // Forwarded verbatim; the object parses and clamps it, so an odd body is
+      // a default room rather than an error.
+      const body = await request.text().catch(() => "");
+      const code = await mintCode(env, url, body);
       return code === null
         ? json({ error: "NO_CODE_AVAILABLE" }, 503)
         : json({ code });
