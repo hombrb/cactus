@@ -1,0 +1,50 @@
+:root {
+  /* Table felt */
+  --felt-deep: #0c2c20;
+  --felt: #16503a;
+  --felt-light: #1d6549;
+  --felt-line: rgba(247, 245, 239, 0.14);
+
+  /* Cards */
+  --card-face: #f7f5ef;
+  --card-face-edge: #ded9cb;
+  --card-back: #1f7053;
+  --card-back-ink: #8fd4b4;
+  --ink: #17211d;
+  --ink-soft: #5d6b64;
+  --suit-red: #b23a2e;
+  --suit-black: #17211d;
+
+  /* Accents */
+  --accent: #e8b04b;
+  --accent-soft: rgba(232, 176, 75, 0.22);
+  --danger: #d9614c;
+
+  /* Text on felt */
+  --on-felt: #f2efe6;
+  --on-felt-dim: rgba(242, 239, 230, 0.6);
+  --on-felt-faint: rgba(242, 239, 230, 0.3);
+
+  /* Geometry */
+  --card-radius: 12px;
+  --card-ratio: 0.7; /* width / height */
+  --gap: 8px;
+  --pad: 14px;
+
+  /* Motion */
+  --fast: 130ms;
+  --base: 200ms;
+  --slow: 320ms;
+  --ease: cubic-bezier(0.22, 0.68, 0.35, 1);
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fast: 0ms;
+    --base: 0ms;
+    --slow: 0ms;
+  }
+}

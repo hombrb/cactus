@@ -1,0 +1,106 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* the board never scrolls */
+  overscroll-behavior: none;
+  background: var(--felt-deep);
+}
+
+body {
+  font-family: var(--font);
+  color: var(--on-felt);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  /* The felt reaches under the notch; padding is restored per side. */
+  background:
+    radial-gradient(120% 70% at 50% 50%, var(--felt-light) 0%, var(--felt) 45%, var(--felt-deep) 100%);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+p,
+ul {
+  margin: 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(247, 245, 239, 0.12);
+  color: var(--on-felt);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(247, 245, 239, 0.16);
+  transition: transform var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+.btn[data-kind="accent"] {
+  background: var(--accent);
+  border-color: transparent;
+  color: #22180a;
+}
+
+.btn[data-kind="ghost"] {
+  background: transparent;
+  border-color: rgba(247, 245, 239, 0.22);
+  color: var(--on-felt-dim);
+}
+
+.btn--big {
+  width: 100%;
+  min-height: 54px;
+  font-size: 17px;
+}
+
+.btn--icon {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  font-size: 20px;
+}
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(env(safe-area-inset-top) + 22px) calc(env(safe-area-inset-right) + 22px)
+    calc(env(safe-area-inset-bottom) + 22px) calc(env(safe-area-inset-left) + 22px);
+}

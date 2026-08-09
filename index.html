@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cactus</title>
+    <meta name="description" content="Le jeu de cartes Cactus, à deux sur un téléphone." />
+
+    <!-- viewport-fit=cover lets the board reach under the notch and home indicator;
+         padding is restored per-side with env(safe-area-inset-*). -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+
+    <!-- Standalone web app. iOS reads the Apple metas; recent versions also honour
+         the manifest. Both are shipped on purpose. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Cactus" />
+    <meta name="theme-color" content="#0c2c20" />
+    <meta name="color-scheme" content="dark" />
+
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png" />
+    <link rel="icon" href="./icons/icon-192.png" type="image/png" />
+
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>
