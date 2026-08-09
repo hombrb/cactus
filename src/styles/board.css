@@ -134,34 +134,87 @@
 
 /* --- layout ------------------------------------------------------------ */
 
-/* Cards are sized from the available HEIGHT: the rows split what is left, each
-   card fills its row, and aspect-ratio derives the width. A layout grown past
-   four cards by penalties therefore gets shorter cards instead of overflowing. */
+/* Cards are sized from the available HEIGHT: the rows split what is left and
+   aspect-ratio derives the width, so a layout grown past four cards by
+   penalties gets smaller cards instead of overflowing.
+
+   Getting there without a circular dependency is the whole trick. The obvious
+   spelling — `grid-template-columns: auto` with `height: 100%` cards — asks the
+   track to size itself to the card's intrinsic width, which is derived from the
+   card's height, which is derived from the track's row, which is derived from
+   the container. Chromium resolves that loop. **WebKit does not**: it takes the
+   intrinsic width contribution as zero and collapses every column to a sliver,
+   which is exactly what iOS showed while the Chromium screenshots stayed clean.
+   `.pile` was unaffected because it carries an explicit width.
+
+   So .layout is a size container and the tracks are plain lengths measured off
+   it. Nothing in the track size depends on the card any more. */
 .layout {
   height: 100%;
   min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(2, auto);
-  grid-auto-rows: minmax(0, 1fr);
-  gap: var(--gap);
-  place-content: center;
   max-width: 100%;
+  container-type: size;
+  display: grid;
+  place-items: center;
 }
 
-.layout[data-count="5"],
-.layout[data-count="6"] {
-  grid-template-columns: repeat(3, auto);
+.layout__grid {
+  --cols: 2;
+  --rows: 2;
+  display: grid;
+  gap: var(--gap);
+  justify-content: center;
+  align-content: center;
+
+  /* Fallback for anything without container queries: equal fractions of the
+     width. Worse proportions, but never a sliver. Must come first — the rule
+     below is dropped at parse time where cq units are unknown. */
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+
+  /* Height-derived width, capped by the width actually available. */
+  grid-template-columns: repeat(
+    var(--cols),
+    min(
+      calc(((100cqh - (var(--rows) - 1) * var(--gap)) / var(--rows)) * var(--card-ratio)),
+      calc((100cqw - (var(--cols) - 1) * var(--gap)) / var(--cols))
+    )
+  );
 }
 
-.layout[data-count="7"],
-.layout[data-count="8"] {
-  grid-template-columns: repeat(4, auto);
+/* A layout only ever grows: emptied slots stay as holes, so the realistic range
+   is four upwards. The small counts are defined anyway — an unmatched count
+   would leave an empty fixed-width track and push the cards off centre. */
+.layout__grid[data-count="1"] {
+  --cols: 1;
+  --rows: 1;
+}
+
+.layout__grid[data-count="2"] {
+  --cols: 2;
+  --rows: 1;
+}
+
+.layout__grid[data-count="5"],
+.layout__grid[data-count="6"] {
+  --cols: 3;
+  --rows: 2;
+}
+
+.layout__grid[data-count="7"],
+.layout__grid[data-count="8"] {
+  --cols: 4;
+  --rows: 2;
+}
+
+.layout__grid[data-count="9"],
+.layout__grid[data-count="10"] {
+  --cols: 5;
+  --rows: 2;
 }
 
 .card--slot {
-  height: 100%;
-  width: auto;
-  max-width: 100%;
+  width: 100%;
+  height: auto;
 }
 
 /* --- middle band -------------------------------------------------------
