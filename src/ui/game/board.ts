@@ -1,10 +1,25 @@
 import { HIDDEN, type PlayerView, type VisibleCard } from "../../engine/project";
 import { nearestSlots } from "../../engine/turn";
-import type { Action, PlayerId, SlotRef } from "../../engine/types";
+import type { Action, CardId, PlayerId, SlotRef } from "../../engine/types";
 import type { GameClient } from "../client";
 import { createCardElement, paintCard } from "./card";
+import {
+  FlightLayer,
+  rectOf,
+  type DragHandle,
+  type Look,
+  type Rect,
+} from "./flight";
+import {
+  mergeSeatEvents,
+  planFlights,
+  sameAnchor,
+  type Anchor,
+  type Flight,
+} from "./flights";
 import { attachGestures } from "./gestures";
 import { RevealGrants } from "./privacy";
+import { actingSeat, targetableBy } from "./targeting";
 
 type Seat = "top" | "bottom";
 
@@ -34,6 +49,13 @@ interface HalfRefs {
 
 const REVEAL_PHASES = new Set(["REVEAL", "ROUND_END", "MATCH_END"]);
 
+/** A planned movement, with the source measured before the board was repainted. */
+interface Departure {
+  readonly flight: Flight;
+  readonly from: Rect;
+  readonly fromLook: Look;
+}
+
 /**
  * The flat-table board: two players facing each other across one phone.
  *
@@ -47,6 +69,12 @@ export class Board {
   private readonly discardCard: HTMLElement;
   private readonly stockCard: HTMLElement;
   private readonly middle: HTMLElement;
+  private readonly flights: FlightLayer;
+  /** Whether the far half is drawn upside down — see `spin`. */
+  private readonly rotated: boolean;
+  /** The card the finger is holding, if any, and where it came from. */
+  private drag: DragHandle | null = null;
+  private dragFrom: Anchor | null = null;
   private menuOpenFor: PlayerId | null = null;
   private unsubscribe: () => void;
 
@@ -70,6 +98,7 @@ export class Board {
     // Flat table sits between two people, so one half is upside down. Online
     // nobody is opposite anybody, and the same rotation would just be wrong.
     const mode = client.seats.length === 1 ? "remote" : "table";
+    this.rotated = mode === "table";
 
     root.innerHTML = `
       <div class="board" data-mode="${mode}">
@@ -88,33 +117,56 @@ export class Board {
     root.querySelector<HTMLElement>(".pile--stock")!.append(this.stockCard);
     root.querySelector<HTMLElement>(".pile--discard")!.append(this.discardCard);
 
+    // Last child of the root, so it paints over both halves and the band between
+    // them without anything in this app needing a z-index.
+    this.flights = new FlightLayer(root);
+
     this.halves.push(this.buildHalf("bottom", bottomId));
     this.halves.push(this.buildHalf("top", topId));
 
+    // Both piles dispatch as *a seat this device owns*, never as whoever's turn
+    // it happens to be. Online the authority substitutes the sender's id
+    // anyway (docs/10 §3), so asserting the opponent's would only earn a
+    // confusing rejection — and it would have lit the piles on their turn.
     this.middle.querySelector(".pile--stock")!.addEventListener("click", () => {
-      this.dispatch({ type: "DrawStock", playerId: this.currentId() });
+      const actor = this.actor();
+      if (actor !== null) this.dispatch({ type: "DrawStock", playerId: actor });
     });
     this.middle.querySelector(".pile--discard")!.addEventListener("click", () => {
       // The pile is only ever a draw source; when the rule is off it is scenery,
       // and dispatching would just earn an ActionRejected.
       if (!this.primaryView().config.turn.takeFromDiscard) return;
-      this.dispatch({ type: "TakeDiscard", playerId: this.currentId() });
+      const actor = this.actor();
+      if (actor !== null) this.dispatch({ type: "TakeDiscard", playerId: actor });
     });
 
     this.unsubscribe = client.subscribe((updates) => {
+      // Order is the whole trick. The DOM still shows the board as it was, so
+      // this is the only moment at which a card's *old* position can be read;
+      // destinations can only be read after the patch, because a slot grown by a
+      // penalty card does not exist until then.
+      const events = this.flights.enabled ? mergeSeatEvents(updates) : [];
+      if (events.some((e) => e.type === "RoundStarted")) this.flights.clear();
+      const departures = this.measureDepartures(
+        planFlights(events, this.primaryView().phase),
+      );
+
       for (const update of updates) {
         this.grants.get(update.seat)?.ingest(update.events);
         // The round can end on somebody else's action; anything still exposed
         // has to go the moment it does.
         if (update.events.some((e) => e.type === "RoundRevealed")) this.hideAllGrants();
       }
+
       this.patch();
+      this.takeOff(departures);
     });
     this.patch();
   }
 
   destroy(): void {
     this.unsubscribe();
+    this.flights.destroy();
     this.root.innerHTML = "";
   }
 
@@ -202,9 +254,11 @@ export class Board {
       half.trayCard,
       {
         onTap: () => {
+          // The drawn card is face up from the moment it lands (see patchTray),
+          // so a tap *hides* it — the escape hatch for when the other player
+          // leans over the table.
           if (this.viewFor(half).heldBy === half.playerId) {
-            half.trayCard.dataset.revealed =
-              half.trayCard.dataset.revealed === "1" ? "0" : "1";
+            half.trayCard.dataset.hidden = half.trayCard.dataset.hidden === "1" ? "0" : "1";
             this.patch();
           }
         },
@@ -238,8 +292,125 @@ export class Board {
     return null;
   }
 
-  private currentId(): PlayerId {
-    return this.primaryView().currentPlayer;
+  /** The seat this device owns that may act right now, if any. */
+  private actor(): PlayerId | null {
+    return actingSeat(this.primaryView(), this.client.seats);
+  }
+
+  // -------------------------------------------------------------------------
+  // Animation
+  //
+  // Driven by events and never by a diff of two views: a reconnecting client is
+  // sent a fresh view and no events at all (see RemoteClient), and the board it
+  // missed must appear rather than fly in from wherever it used to be.
+  // -------------------------------------------------------------------------
+
+  /** Where each moving card is *now*, read before the patch repaints the board. */
+  private measureDepartures(plan: readonly Flight[]): Departure[] {
+    const out: Departure[] = [];
+    for (const flight of plan) {
+      const el = this.anchorEl(flight.from);
+      if (!el) continue;
+      const from = rectOf(el);
+      // Nothing to fly from: an empty pile, or the tray card while hidden.
+      if (from.w === 0) continue;
+      out.push({ flight, from, fromLook: this.lookOf(el, flight.cardId) });
+    }
+    return out;
+  }
+
+  private takeOff(departures: readonly Departure[]): void {
+    if (departures.length === 0) return;
+
+    // Every destination is measured first, then the cards are hidden and the
+    // clones made: one layout flush per update rather than one per flight.
+    const arrivals = departures.map((departure) => {
+      const at = departure.flight.kind === "return" ? departure.flight.from : departure.flight.to;
+      const el = this.anchorEl(at);
+      return { departure, at, el, to: el ? rectOf(el) : null };
+    });
+
+    for (const { departure, at, el, to } of arrivals) {
+      const { flight } = departure;
+      if (!el || !to || to.w === 0) continue;
+      const toLook = this.lookOf(el, flight.cardId);
+      const spin = this.spin(at);
+
+      // The card under the finger is the one that lands: adopted, never cloned a
+      // second time.
+      if (this.drag && this.dragFrom && sameAnchor(this.dragFrom, flight.from)) {
+        this.drag.release(to, toLook, spin, el);
+        this.drag = null;
+        this.dragFrom = null;
+        continue;
+      }
+
+      // A card that was shown and put back never moved, so there is nothing to
+      // fly — only something to admit to.
+      if (flight.kind === "return") {
+        this.shake(el);
+        continue;
+      }
+
+      this.flights.fly({
+        from: departure.from,
+        to,
+        fromLook: departure.fromLook,
+        toLook,
+        spin,
+        hide: el,
+      });
+    }
+  }
+
+  private anchorEl(anchor: Anchor): HTMLElement | null {
+    switch (anchor.kind) {
+      case "stock":
+        return this.stockCard;
+      case "discard":
+        return this.discardCard;
+      case "tray": {
+        const half = this.halfOf(anchor.playerId);
+        return half && !half.trayCard.hidden ? half.trayCard : null;
+      }
+      case "slot":
+        return this.halfOf(anchor.playerId)?.slots[anchor.slot] ?? null;
+      case "hand":
+        return this.halfOf(anchor.playerId)?.layout ?? null;
+    }
+  }
+
+  private halfOf(playerId: PlayerId): HalfRefs | undefined {
+    return this.halves.find((h) => h.playerId === playerId);
+  }
+
+  /**
+   * How a flying card must look at one end of its journey.
+   *
+   * The *face* is whatever the renderer decided that element shows — grants and
+   * all (docs/09 §5) — so a card that is a back on the board is a back in the
+   * air. The event only ever supplies the identity, for the case where the
+   * destination is already face up.
+   */
+  private lookOf(el: HTMLElement, cardId: CardId | typeof HIDDEN): Look {
+    const face = (el.dataset.face ?? "back") as "back" | "face" | "empty";
+    if (face !== "face" || cardId === HIDDEN) return { face: face === "empty" ? "back" : face };
+    for (const seat of this.client.seats) {
+      const card = this.client.view(seat).cards[cardId];
+      if (card) return { face: "face", card };
+    }
+    return { face: "back" };
+  }
+
+  /** The far half is drawn upside down; the flight layer is not rotated. */
+  private spin(anchor: Anchor): number {
+    if (!this.rotated || anchor.kind === "stock" || anchor.kind === "discard") return 0;
+    return this.halfOf(anchor.playerId)?.seat === "top" ? 180 : 0;
+  }
+
+  private shake(el: HTMLElement): void {
+    el.dataset.shake = "1";
+    el.addEventListener("animationend", () => delete el.dataset.shake, { once: true });
   }
 
   // -------------------------------------------------------------------------
@@ -249,6 +420,9 @@ export class Board {
   private patch(): void {
     for (const half of this.halves) this.patchHalf(half, this.viewFor(half));
     this.patchMiddle(this.primaryView());
+    // A layout that grew was rebuilt from scratch, so a flight may be on its way
+    // to a node that no longer exists.
+    this.flights.prune();
   }
 
   private patchMiddle(view: PlayerView): void {
@@ -258,7 +432,9 @@ export class Board {
 
     paintCard(this.stockCard, view.stockCount > 0 ? "back" : "empty");
 
-    const actionable = view.phase === "TURN_START";
+    // Only ever lit for a seat this device owns: online, the opponent's turn is
+    // not an invitation to draw.
+    const actionable = view.phase === "TURN_START" && this.actor() !== null;
     this.middle.querySelector(".pile--stock")!.toggleAttribute("data-live", actionable);
     this.middle
       .querySelector(".pile--discard")!
@@ -318,7 +494,9 @@ export class Board {
       }
 
       el.dataset.grant = grants?.has(ref) ? "1" : "0";
-      el.dataset.target = half.live && this.isTargetable(view, ref) ? "1" : "0";
+      // Not `half.live`: a power that targets an opponent lights up their half,
+      // which is the whole point of it, and online that half is not ours.
+      el.dataset.target = targetableBy(view, this.client.seats, ref) !== null ? "1" : "0";
       el.dataset.chosen = view.pendingPower?.targets.some(
         (t) => t.playerId === ref.playerId && t.slot === ref.slot,
       )
@@ -327,37 +505,18 @@ export class Board {
     });
   }
 
-  private isTargetable(view: PlayerView, ref: SlotRef): boolean {
-    const owner = view.players.find((p) => p.id === ref.playerId);
-    const slot = owner?.layout[ref.slot];
-    if (slot === undefined || slot === null) return false;
-
-    if (view.pendingPower) {
-      const kind = view.pendingPower.kind;
-      const isOwn = ref.playerId === view.pendingPower.ownerId;
-      const first = view.pendingPower.targets[0];
-      switch (kind) {
-        case "PEEK_OWN":
-          return isOwn;
-        case "PEEK_OPPONENT":
-        case "GIVE_CARD":
-          return !isOwn;
-        case "BLIND_SWAP":
-        case "LOOK_AND_SWAP":
-          return first === undefined ? isOwn : !isOwn;
-        default:
-          return false;
-      }
-    }
-
-    if (view.phase === "AWAIT_HELD_DECISION" || view.phase === "AWAIT_SLOT_FOR_DISCARD") {
-      return ref.playerId === view.currentPlayer;
-    }
-    return false;
-  }
-
+  /**
+   * Every slot on the board is wired, including the opponent's.
+   *
+   * That is what makes PEEK_OPPONENT and the second half of a swap playable when
+   * this device holds one seat: `targetableBy` decides who may tap, so a half
+   * this device does not own is still a legal *target* even though it is not a
+   * seat we can act as. Only the two gestures that expose a card stay behind
+   * `half.live` — a grant on a foreign slot is shown in the actor's own tray,
+   * never lit up in the opponent's half, where they could not shield it
+   * (docs/10 §6 rule 1).
+   */
   private attachSlotGestures(half: HalfRefs, index: number): void {
-    if (!half.live) return;
     const el = half.slots[index] ?? half.layout.children[index];
     if (!(el instanceof HTMLElement)) return;
     const ref: SlotRef = { playerId: half.playerId, slot: index };
@@ -367,27 +526,82 @@ export class Board {
       el,
       {
         onTap: () => this.onSlotTap(half, ref),
-        onLongPressStart: () => {
-          if (this.viewFor(half).phase === "INITIAL_PEEK") this.ensurePeekDispatched(half);
-          if (this.grantsFor(half)?.beginLook(ref)) this.patch();
-        },
-        onLongPressEnd: () => {
-          this.grantsFor(half)?.endLook(ref);
-          this.patch();
-        },
-        onSwipeInward: () => {
-          const view = this.viewFor(half);
-          if (!view.config.snap.enabled) return;
-          this.dispatch({
-            type: "Snap",
-            playerId: half.playerId,
-            target: ref,
-            forVersion: view.discardVersion,
-          });
+        onLongPressStart: half.live
+          ? () => {
+              if (this.viewFor(half).phase === "INITIAL_PEEK") this.ensurePeekDispatched(half);
+              if (this.grantsFor(half)?.beginLook(ref)) this.patch();
+            }
+          : undefined,
+        onLongPressEnd: half.live
+          ? () => {
+              this.grantsFor(half)?.endLook(ref);
+              this.patch();
+            }
+          : undefined,
+        onSwipeInward: () => this.onSlotSwipe(half, ref),
+        onDragStart: () => this.onSlotDragStart(half, ref, el),
+        onDragMove: ({ clientX, clientY }) => this.drag?.moveTo(clientX, clientY),
+        onDragEnd: () => {
+          // Not adopted by a movement, so the card falls back into its slot.
+          this.drag?.cancel();
+          this.drag = null;
+          this.dragFrom = null;
         },
       },
       { inward },
     );
+  }
+
+  /**
+   * Lift a card off the table and give it to the finger.
+   *
+   * It is handed to the flight layer rather than transformed in place, which is
+   * what lets it cross the middle band — and spares every delta the sign flip the
+   * far half's 180° rotation would otherwise impose (see flight.ts).
+   */
+  private onSlotDragStart(half: HalfRefs, ref: SlotRef, el: HTMLElement): boolean {
+    // Declined rather than ignored: a card that cannot be snapped must still
+    // accept a tap after a few pixels of slide, as it did before drags existed.
+    if (!this.flights.enabled) return false;
+    const view = this.viewFor(half);
+    if (!view.config.snap.enabled) return false;
+    const snapper = half.live ? half.playerId : this.actor();
+    if (snapper === null) return false;
+    if (snapper !== ref.playerId && !view.config.snap.allowOnOpponent) return false;
+    if (el.dataset.face === "empty") return false;
+
+    const anchor: Anchor = { kind: "slot", playerId: ref.playerId, slot: ref.slot };
+    this.dragFrom = anchor;
+    this.drag = this.flights.lift(
+      rectOf(el),
+      this.lookOf(el, HIDDEN),
+      this.spin(anchor),
+      el,
+    );
+    return true;
+  }
+
+  /**
+   * Snapping. The snapper is the owner of the half when this device holds it —
+   * at a shared table a swipe means "the player at this end" — and otherwise the
+   * one seat we do own, which is how a snap on an opponent's card is expressed.
+   */
+  private onSlotSwipe(half: HalfRefs, ref: SlotRef): void {
+    const view = this.viewFor(half);
+    if (!view.config.snap.enabled) return;
+
+    const snapper = half.live ? half.playerId : this.actor();
+    if (snapper === null) return;
+    // Off in every shipped preset; validateSnap would reject it as NOT_YOUR_CARD
+    // anyway, and a rejection here would be a free board oracle (docs/07 §3).
+    if (snapper !== ref.playerId && !view.config.snap.allowOnOpponent) return;
+
+    this.dispatch({
+      type: "Snap",
+      playerId: snapper,
+      target: ref,
+      forVersion: view.discardVersion,
+    });
   }
 
   private ensurePeekDispatched(half: HalfRefs): void {
@@ -401,23 +615,25 @@ export class Board {
     });
   }
 
+  /**
+   * One question — "may this be tapped, and by whom" — asked by the highlight and
+   * by the handler, so the two can no longer disagree.
+   */
   private onSlotTap(half: HalfRefs, ref: SlotRef): void {
     const view = this.viewFor(half);
-    const current = view.currentPlayer;
+    const actor = targetableBy(view, this.client.seats, ref);
+    if (actor === null) return;
 
     if (view.pendingPower) {
-      this.dispatch({ type: "PowerTarget", playerId: view.pendingPower.ownerId, target: ref });
+      this.dispatch({ type: "PowerTarget", playerId: actor, target: ref });
       return;
     }
-    if (
-      (view.phase === "AWAIT_HELD_DECISION" || view.phase === "AWAIT_SLOT_FOR_DISCARD") &&
-      ref.playerId === current
-    ) {
-      this.dispatch({ type: "PlaceInSlot", playerId: current, slot: ref.slot });
+    if (view.phase === "AWAIT_HELD_DECISION" || view.phase === "AWAIT_SLOT_FOR_DISCARD") {
+      this.dispatch({ type: "PlaceInSlot", playerId: actor, slot: ref.slot });
       return;
     }
-    if (view.phase === "AWAIT_SNAP_GIVE" && view.pendingSnapGive?.snapperId === ref.playerId) {
-      this.dispatch({ type: "SnapGive", playerId: ref.playerId, slot: ref.slot });
+    if (view.phase === "AWAIT_SNAP_GIVE") {
+      this.dispatch({ type: "SnapGive", playerId: actor, slot: ref.slot });
     }
   }
 
@@ -443,6 +659,11 @@ export class Board {
       return;
     }
 
+    // The hide toggle belongs to one held card, so it cannot outlive it —
+    // otherwise a card hidden on one turn is still hidden when the next is
+    // drawn. Reset here rather than in each action that lets go of the card.
+    if (view.heldBy !== half.playerId) half.trayCard.dataset.hidden = "0";
+
     const me = view.players.find((p) => p.id === half.playerId)!;
     const buttons: { label: string; kind?: string; run: () => void }[] = [];
     let prompt = "";
@@ -457,10 +678,17 @@ export class Board {
     } else if (revealAll) {
       prompt = this.endOfRoundPrompt(view, half.playerId);
       if (view.phase === "ROUND_END") {
-        buttons.push({
-          label: "Manche suivante",
-          run: () => this.dispatch({ type: "StartNextRound", playerId: view.hostId }),
-        });
+        // Only the host may deal (docs/05), and only a seat this device owns may
+        // be dispatched for. Offering the button to a guest online promised
+        // something it could not do.
+        if (this.client.seats.includes(view.hostId)) {
+          buttons.push({
+            label: "Manche suivante",
+            run: () => this.dispatch({ type: "StartNextRound", playerId: view.hostId }),
+          });
+        } else {
+          prompt = `${prompt} · en attente de l'hôte`;
+        }
       } else if (view.phase === "MATCH_END") {
         buttons.push({ label: "Nouvelle partie", run: () => this.onQuit() });
       }
@@ -541,21 +769,24 @@ export class Board {
         };
 
       case "AWAIT_HELD_DECISION": {
-        const revealed = half.trayCard.dataset.revealed === "1";
+        // Face up by default. The tray sits at this player's own edge (board.css
+        // pins it to the outermost row), so the card they just drew is theirs to
+        // read without a gesture; a tap hides it again.
+        const hidden = half.trayCard.dataset.hidden === "1";
         const held = view.heldCard;
+        const shown = !hidden && held !== null && held !== HIDDEN;
         buttons.push({
           label: "Défausser",
-          run: () => {
-            half.trayCard.dataset.revealed = "0";
-            this.dispatch({ type: "DiscardHeld", playerId: me });
-          },
+          run: () => this.dispatch({ type: "DiscardHeld", playerId: me }),
         });
         return {
-          prompt: revealed ? "Pose-la sur une carte, ou défausse" : "Touche la carte pour la voir",
+          prompt: hidden
+            ? "Touche la carte pour la revoir"
+            : "Pose-la sur une carte, ou défausse",
           buttons,
-          trayFace: revealed && held && held !== HIDDEN ? "face" : "back",
-          trayCardId: revealed && held && held !== HIDDEN ? held : null,
-          trayLabel: revealed ? "" : "touche",
+          trayFace: shown ? "face" : "back",
+          trayCardId: shown ? held : null,
+          trayLabel: hidden ? "voir" : "",
         };
       }
 

@@ -24,6 +24,12 @@ const context = await browser.newContext({
   deviceScaleFactor: 2,
   isMobile: true,
   hasTouch: true,
+  // Cards fly between the piles and the players, and a card caught mid-flight is
+  // a different screenshot every run. Reduced motion is the app's own switch for
+  // that — tokens.css zeroes every duration, including the two the flight layer
+  // reads — so this asks for a configuration the app already supports rather
+  // than a test-only one. `?motion=off` below says the same thing twice.
+  reducedMotion: "reduce",
 });
 const page = await context.newPage();
 
@@ -101,7 +107,7 @@ const phase = () =>
 
 // ---------------------------------------------------------------------------
 
-await page.goto(`${BASE}/?seed=s4`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/?seed=s4&motion=off`, { waitUntil: "networkidle" });
 await shot("menu");
 
 await page.getByRole("button", { name: "Règles" }).click();
@@ -168,14 +174,19 @@ await release();
 await page.waitForTimeout(120);
 await shot("turn-start");
 
-// Draw, reveal the drawn card, then discard it to trigger the 9/10 power.
+// Draw — the card lands face up in the private row at the player's own edge —
+// then discard it to trigger the 9/10 power. A tap on it hides it again, which is
+// the escape hatch when the other player leans over.
 await page.locator(".pile--stock").click();
 await page.waitForTimeout(120);
+await shot("held-visible");
+
+await half("bottom").locator(".card--tray").click();
+await page.waitForTimeout(150);
 await shot("held-hidden");
 
 await half("bottom").locator(".card--tray").click();
 await page.waitForTimeout(150);
-await shot("held-revealed");
 
 await page.getByRole("button", { name: "Défausser" }).click();
 await page.waitForTimeout(150);

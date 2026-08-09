@@ -27,13 +27,28 @@ const browser = await chromium.launch({
   executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
 });
 
-async function phone() {
-  const context = await browser.newContext({ viewport: PHONE, deviceScaleFactor: 2 });
+async function phone(settings) {
+  const context = await browser.newContext({
+    viewport: PHONE,
+    deviceScaleFactor: 2,
+    // Cards fly between the piles and the players. Every width and visibility
+    // assertion below wants the board settled, so ask for the app's own
+    // no-motion mode rather than sleeping past each animation.
+    reducedMotion: "reduce",
+  });
   const page = await context.newPage();
   page.on("pageerror", (error) => {
     console.error(`  FAIL page error: ${error.message}`);
     failures += 1;
   });
+  // Chosen rules normally come from the Réglages screens; a phone that needs a
+  // specific ruleset writes them straight into the store the screens use.
+  if (settings) {
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      ["cactus.settings.v1", JSON.stringify(settings)],
+    );
+  }
   await page.goto(ORIGIN, { waitUntil: "networkidle" });
   return page;
 }
@@ -54,6 +69,119 @@ function halfInfo(page, seat) {
       prompt: half.querySelector(".tray__prompt").textContent,
     };
   }, seat);
+}
+
+const ALL_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+
+/**
+ * A power aimed at the opponent's half, from a phone that holds one seat.
+ *
+ * The regression this exists for: every slot gesture used to be gated on "is this
+ * half mine", so in a room the opponent's cards accepted no input at all.
+ * `PEEK_OPPONENT` (docs/06 §4) would sit there with the prompt "Regarde une carte
+ * adverse" and nothing to tap, until the 45-second turn clock skipped it. Neither
+ * `check-room` nor the flat-table screenshots could see it: the authority was
+ * always willing, and the flat table owns both halves.
+ *
+ * Its own pair of phones and its own room, because it needs every rank to be that
+ * power — a choice the host is allowed to make, and the only way to be
+ * deterministic about a deal the server seeds.
+ */
+async function checkOpponentPower() {
+  const powers = Object.fromEntries(ALL_RANKS.map((rank) => [rank, "PEEK_OPPONENT"]));
+  const settings = {
+    preset: "standard",
+    snap: false,
+    names: ["Joueur 1", "Joueur 2"],
+    scoreLimit: 100,
+    powers,
+    seedDiscard: true,
+    takeFromDiscard: true,
+  };
+  const host = await phone(settings);
+  const guest = await phone();
+
+  await host.getByRole("button", { name: "Jouer à plusieurs" }).click();
+  await host.fill('input[name="name"]', "Hôte");
+  await host.getByRole("button", { name: "Créer une partie" }).click();
+  await host.waitForSelector(".lobby__code:not(:empty)", { timeout: 10000 });
+  const roomCode = (await host.textContent(".lobby__code")).trim();
+
+  await guest.getByRole("button", { name: "Jouer à plusieurs" }).click();
+  await guest.fill('input[name="name"]', "Invité");
+  await guest.fill('input[name="code"]', roomCode);
+  await guest.getByRole("button", { name: "Rejoindre" }).click();
+  await guest.waitForSelector(".lobby__code:not(:empty)", { timeout: 10000 });
+
+  await host.waitForFunction(() => document.querySelectorAll(".lobby__player").length === 2, {
+    timeout: 10000,
+  });
+  await host.getByRole("button", { name: "Démarrer" }).click();
+  for (const page of [host, guest]) {
+    await page.waitForSelector(".board", { timeout: 10000 });
+    await page.getByRole("button", { name: "Prêt sans regarder" }).first().click();
+  }
+
+  const prompt = (page) =>
+    page.evaluate(
+      () => document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "",
+    );
+  await host.waitForTimeout(400);
+  const hostPlays = (await prompt(host)).includes("Pioche");
+  const player = hostPlays ? host : guest;
+  const other = hostPlays ? guest : host;
+
+  // Draw, then throw it away — which is the only thing that fires a power.
+  await player.locator(".pile--stock").click();
+  await player.waitForTimeout(200);
+  await player.getByRole("button", { name: "Défausser" }).click();
+  await player.waitForFunction(
+    () => (document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "")
+      .includes("adverse"),
+    { timeout: 5000 },
+  );
+  check(true, "a discard fires a power that has to be aimed at the opponent");
+
+  const targets = await player.evaluate(
+    () => document.querySelectorAll('.half[data-seat="top"] .card--slot[data-target="1"]').length,
+  );
+  check(targets > 0, `the opponent's cards are offered as targets (${targets} of them)`);
+  check(
+    (await player.evaluate(
+      () => document.querySelectorAll('.half[data-seat="bottom"] .card--slot[data-target="1"]').length,
+    )) === 0,
+    "and the player's own are not",
+  );
+
+  await player.locator('.half[data-seat="top"] .card--slot[data-slot="1"]').click();
+  await player.waitForTimeout(300);
+
+  // The card is shown at the actor's own edge, where a hand can shield it —
+  // never lit up in the opponent's half (docs/10 §6 rule 1).
+  const tray = await player.evaluate(() => {
+    const card = document.querySelector('.half[data-seat="bottom"] .card--tray');
+    return { hidden: card.hidden, face: card.dataset.face, grant: card.dataset.grant };
+  });
+  check(tray.hidden === false, "the reveal is offered in the actor's own tray");
+
+  await player.locator('.half[data-seat="bottom"] .card--tray').hover();
+  await player.mouse.down();
+  await player.waitForTimeout(500);
+  const looking = await player.evaluate(
+    () => document.querySelector('.half[data-seat="bottom"] .card--tray').dataset.face,
+  );
+  await player.mouse.up();
+  check(looking === "face", "holding it down shows the opponent's card");
+
+  const leaked = await other.evaluate(() =>
+    [...document.querySelectorAll(".card--slot, .card--tray")]
+      .filter((c) => !c.hidden)
+      .map((c) => c.dataset.face),
+  );
+  check(!leaked.includes("face"), "the other phone is shown no face at all");
+
+  await host.context().close();
+  await guest.context().close();
 }
 
 const alice = await phone();
@@ -187,6 +315,13 @@ check(
   watcherSees.every((face) => face !== "face"),
   "the other phone never renders the drawn card face up",
 );
+
+const actorTrayFace = await actor.evaluate(
+  () => document.querySelector('.half[data-seat="bottom"] .card--tray').dataset.face,
+);
+check(actorTrayFace === "face", "and gets to read it without a second gesture");
+
+await checkOpponentPower();
 
 await browser.close();
 console.log(failures === 0 ? "\nlobby checks passed" : `\n${failures} lobby check(s) failed`);

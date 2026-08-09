@@ -5,11 +5,15 @@
   --felt-light: #1d6549;
   --felt-line: rgba(247, 245, 239, 0.14);
 
-  /* Cards */
+  /* Cards.
+     The back is red like a real deck: a cream margin, then a printed panel.
+     `--card-back` is also the menu logo's two outer cards (menu.css). */
   --card-face: #f7f5ef;
   --card-face-edge: #ded9cb;
-  --card-back: #1f7053;
-  --card-back-ink: #8fd4b4;
+  --card-back: #a4322c;
+  --card-back-deep: #7a1f1c;
+  --card-back-ink: rgba(255, 232, 214, 0.3);
+  --card-back-edge: #f4efe4;
   --ink: #17211d;
   --ink-soft: #5d6b64;
   --suit-red: #b23a2e;
@@ -37,6 +41,13 @@
   --slow: 320ms;
   --ease: cubic-bezier(0.22, 0.68, 0.35, 1);
 
+  /* A card travelling across the table, and a short hop or a fall back into
+     place. Read by src/ui/game/flight.ts as well as by CSS, so that zeroing them
+     below is the single switch that turns all motion off — including the
+     JS-driven kind. */
+  --flight: 240ms;
+  --flight-near: 160ms;
+
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
 }
@@ -46,5 +57,7 @@
     --fast: 0ms;
     --base: 0ms;
     --slow: 0ms;
+    --flight: 0ms;
+    --flight-near: 0ms;
   }
 }

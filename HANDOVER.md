@@ -22,7 +22,7 @@ is French and must stay French.
 ```bash
 npm install
 npm run dev                       # dev server
-npm test                          # 59 tests, ~5 s
+npm test                          # 84 tests, ~5 s
 npm run build                     # typecheck (app + worker) + vite build
 npm run preview                   # needed by the two scripts below
 npm run shots                     # Chromium at 390×844, fails on clipped cards — Chromium ONLY
@@ -30,8 +30,8 @@ npm run check:pwa                 # manifest, iOS metas, genuine offline reload
 npm run verify                    # all of the above
 
 npm run dev:worker                # wrangler dev on :8787, serves dist/ + /api
-npm run check:room                # 24 protocol checks over raw sockets
-npm run check:lobby               # 22 checks driving two browsers through the UI
+npm run check:room                # 29 protocol checks over raw sockets
+npm run check:lobby               # 29 checks driving two browsers through the UI
 npm run check:online              # both of the above
 ```
 
@@ -44,7 +44,9 @@ so two genuinely different players — it is the only test that plays the game t
 way a person does.
 
 `?seed=xxx` on the URL forces a deterministic deal — that is how
-`scripts/shots.mjs` reaches a specific situation.
+`scripts/shots.mjs` reaches a specific situation. `?motion=off` turns off the
+card flights, which is the other half of what makes the screenshots repeatable
+(trap 19), and what you want on one of two phones while debugging one.
 
 **Do not run `npx playwright install`.** The browsers are preinstalled and the
 scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly.
@@ -79,11 +81,25 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 - **The lobby** (`src/ui/screens/lobby.ts`): create a room with the host's own
   rules, join by code, player list, host-only start. Identity is
   `src/ui/identity.ts`.
-- **Tests**: 59 in `npm test` — the 37-step worked trace, the invariant sweep
+- **The board reads like cards.** Red backs (a cream margin, a printed panel, a
+  diamond lattice — all layered gradients, no assets), every private moment in a
+  row at its owner's own edge rather than facing the opponent, the drawn card
+  face up on arrival, and cards that fly between the places they moved between:
+  `src/ui/game/flights.ts` says what moved, `src/ui/game/flight.ts` draws it in
+  a layer of its own, and a fast discard follows the finger. See docs/10 §6.
+- **Powers that target an opponent work in a room.** They never did: the board
+  gated every slot gesture on "is this seat mine", so with one seat per device
+  the opponent's half accepted no input at all and `PEEK_OPPONENT` / the second
+  half of a swap expired on the turn clock. `src/ui/game/targeting.ts` now
+  answers "which seat may act" and "which slot may be aimed at" separately.
+  docs/10 §3 records the rule; `tests/targeting.test.ts` and both online checks
+  cover it.
+- **Tests**: 84 in `npm test` — the 37-step worked trace, the invariant sweep
   (now including an assembled config: custom powers, no opening discard, stock
-  only), the projection/wire-format sweep, 21 room tests, and 15 config tests
-  covering what a client is allowed to ask for. Plus 24 protocol checks and 22
-  two-browser checks against a real Durable Object.
+  only), the projection/wire-format sweep, 21 room tests, 15 config tests
+  covering what a client is allowed to ask for, 12 on who may aim at what, and
+  13 on events → card movements. Plus 29 protocol checks and 29 two-browser
+  checks against a real Durable Object.
 
 ### Known gaps (deliberate, not forgotten)
 
@@ -96,7 +112,9 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 - `snap.allowOnOpponent` and the Ace `GIVE_CARD` power remain implemented,
   off by default, and never exercised in a real game. Still untested — which is
   why `GIVE_CARD` is deliberately absent from `SELECTABLE_POWERS` and cannot be
-  reached from the powers editor.
+  reached from the powers editor. The board now expresses both (a swipe on a
+  card that is not yours, and an opponent target) rather than being unable to,
+  but neither is reachable from any settings screen.
 - The board is still a two-sided flat table. 3–8 players is phase 5.
 - No CI. The two commands above are the gate, and neither of them can see
   Safari — see trap 12.
@@ -219,7 +237,35 @@ not save you from. The rest predate this session and are still live.
 17. **Cards must size from available height, never fixed width.** A layout
     grown past four cards by penalties has to shrink, not overflow.
     `src/styles/board.css`.
-18. **Whatever the page does not paint, iOS fills from the *root* element.**
+18. **A card must never be animated where it lives.** Three separate things
+    forbid it, and each one bit before it was understood: `.layout` is a
+    `container-type: size` container, so it is a containing block for
+    `position: fixed` *and* a stacking context — a card moving inside it cannot
+    leave it; the far half's `.rotor` is `rotate(180deg)`, which makes it a
+    containing block too **and negates any `translate` on a descendant, on both
+    axes**; and nothing in this app has a `z-index`, so with `.middle` sitting
+    between the two halves in DOM order, a far-half card crossing the band
+    passes underneath it. `src/ui/game/flight.ts` therefore flies a *clone* in a
+    fixed, unrotated layer that is the last child of `#app`. Build the clone
+    with `createCardElement`, never `cloneNode`: a copy carries `card--slot`
+    (trap 16 measures those), `data-slot`, `data-target` and the pulsing
+    `data-grant`.
+19. **Motion is one switch, and the gate depends on it.** `tokens.css` zeroes
+    `--flight` / `--flight-near` under `prefers-reduced-motion`, and
+    `flight.ts` reads those tokens back rather than duplicating the media query
+    — so Playwright's `reducedMotion: "reduce"` turns off the JS animations too.
+    Both `shots.mjs` and `check-lobby.mjs` rely on that: their `waitForTimeout`s
+    are 60–200 ms and a card caught mid-flight is a different screenshot every
+    run. `?motion=off` says the same thing on the URL, which is what you want on
+    one of two phones while debugging.
+20. **A flying card looks like its destination, not like the event.** The event
+    supplies only the card's *identity*; whether a face may be drawn is
+    `el.dataset.face`, which the renderer has already decided with the reveal
+    grants applied (trap 5). Take the face from the event and the flat table
+    leaks: `mergeSeatEvents` deliberately picks the *most entitled* of the two
+    seats' redacted streams, so it will hand you a real card id for a card the
+    board is showing as a back.
+21. **Whatever the page does not paint, iOS fills from the *root* element.**
     The felt used to live on `#app`, which is `position: fixed; inset: 0` and so
     only ever covered the layout viewport. In an installed web app the strip
     left below it showed the flat `--felt-deep` of `html, body` — darker than

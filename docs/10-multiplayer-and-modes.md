@@ -72,6 +72,15 @@ client                     authority
 - Actions carry `playerId`; the authority overwrites it with the identity of the
   connection that sent it. A client asserting somebody else's id is a dropped
   connection, not a rejected action.
+- **"Which seat may I act as" and "which slot may I aim at" are two different
+  questions.** A client acts only as a seat it holds, but it must be able to aim at
+  any slot the rules allow — including in a half it holds no seat for, which is
+  every half but one in a room. `PEEK_OPPONENT` and the second target of a swap
+  ([06 §4](06-powers.md#4-peek_opponent--9-10),
+  [06 §5](06-powers.md#5-blind_swap--jack-queen)) are unplayable otherwise, and
+  they fail *quietly*: the phase is entered, nothing accepts the input, and the
+  turn clock skips the power. So a client must never gate input on "are these my
+  cards" — only on "am I the one the rules are waiting for".
 
 ### Hosting, given "no database"
 
@@ -190,23 +199,38 @@ Instead each *private moment* is hidden individually, and the rule is one gestur
 |---|---|
 | **Tap** | Place the held card here · choose a power target |
 | **Long-press** | Reveal a card you are entitled to see — hidden again on release |
-| **Swipe toward the middle** | Snap ([07 §8](07-snap.md#8-two-players-on-one-device)) |
+| **Swipe toward the middle** | Snap ([07 §8](07-snap.md#8-two-players-on-one-device)); the card follows the finger |
+| **Tap the card you just drew** | Hide it again — it arrives face up (see rule 1 below) |
 
 Long-press is what makes this work physically: you cup the phone with the same
 hand that is holding the card down, and nothing can be left exposed by accident.
 
-Three placement rules follow, and all three are load-bearing:
+Four placement rules follow, and all four are load-bearing:
 
-1. **A card is drawn in the half of the player entitled to see it.** A
-   `CardRevealed` naming an *opponent's* slot is rendered in the **actor's own
-   tray**, never lit up in the opponent's half — the actor could not shield it
-   there.
+1. **Every private card sits in a row at its owner's own edge, outside the card
+   grid** — the furthest point on the screen from the other player, and the one a
+   cupped hand covers. Two things go there, and only there:
+   - **The card just drawn, face up.** It is the player's own to read, and asking
+     for a gesture to see a card they are entitled to see was friction with no
+     privacy to show for it: the row is at their edge, and a tap hides the card
+     again if the other player leans over.
+   - **A card revealed elsewhere.** A `CardRevealed` naming an *opponent's* slot
+     is rendered in the **actor's own row**, never lit up in the opponent's half,
+     where the actor could not shield it.
 2. **The middle band carries no text.** Anything written between the two players
    is upside down for one of them. Only the stock back and the discard face.
 3. **Card faces print rank and suit in two opposite corners, the second rotated
    180°** — exactly like a real playing card. This is what makes the shared
    discard legible from both ends, and it is the single most important design
    detail on the screen.
+4. **A card that moves is animated between the two places it moved between**, and
+   the moving card is drawn *outside* both halves, in one unrotated layer over the
+   whole screen. Anything else is wrong on this board rather than merely uglier: a
+   card moving inside a half cannot leave it, inherits that half's 180° rotation,
+   and passes underneath the middle band. What a moving card shows is whatever the
+   renderer decided its destination shows — never what the event happens to name —
+   so the section below applies to a card in the air exactly as it does to one on
+   the felt.
 
 ### `projectFor` permits; the client still decides
 
@@ -221,10 +245,17 @@ the moment they stop looking. You get one look, as at a real table. This is the
 concrete form of the rule in
 [09 §5](09-hidden-information.md#5-what-the-engine-deliberately-does-not-model).
 
+The **held card is not a grant** and never was: `projectFor` ships it to its holder
+alone, and it ceases to exist the moment they put it down. Showing it face up costs
+nothing that a grant was protecting.
+
 ### Consequences
 
 - **Snap stays on.** Both players can reach their own half at all times, so the
-  race is genuine. Ordered by `pointerdown`, not by gesture recognition.
+  race is genuine. Ordered by `pointerdown`, not by gesture recognition — which is
+  also why the snap is **submitted the moment the swipe threshold is crossed**,
+  not when the finger lifts. The card carrying on after the finger is animation;
+  the race was already run.
 - **The initial peek is simultaneous.** Each player long-presses their own two
   nearest cards, at their own end, at the same time. The `INITIAL_PEEK` barrier
   already tolerates any ordering
