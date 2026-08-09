@@ -1,0 +1,10 @@
+// The worker typechecks on its own: workerd's globals and the DOM's disagree
+// about WebSocket, and letting both into one program hides real errors.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["worker", "src/net", "src/engine"]
+}

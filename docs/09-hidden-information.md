@@ -47,10 +47,14 @@ type PlayerView {
   phase:          Phase
   roundNumber:    int
   turnNumber:     int
+  config:         RuleConfig         // the rules are public; the renderer needs them
+  hostId:         PlayerId           // who may StartMatch / StartNextRound
+  turnOrder:      PlayerId[]         // seating, which is public by definition
   currentPlayer:  PlayerId
   players: {
     id: PlayerId, name: string, connected: bool,
-    eliminated: bool, cumulativeScore: int,
+    eliminated: bool, cumulativeScore: int, roundScore: int?,
+    hasPeeked: bool,
     layout: VisibleCard[]            // EMPTY stays EMPTY and is visible to all
   }[]
   discard:        CardId[]           // fully public, always
@@ -59,9 +63,10 @@ type PlayerView {
   heldBy:         PlayerId?          // who is holding a card
   heldCard:       VisibleCard?       // the id only if you are the holder
   pendingPower:   { kind, ownerId, targets: SlotRef[] }?   // shape, not content
+  pendingSnapGive: { snapperId, victimId, victimSlot }?    // everyone saw the snap
   announcerId:    PlayerId?
   finalLapRemaining: int?
-  scores:         {playerId, roundScore, cumulative}[]?    // only from REVEAL on
+  cards:          Record<CardId, Card>   // only the faces this viewer may render
 }
 
 fn projectFor(state, viewer: PlayerId) -> PlayerView
@@ -85,9 +90,18 @@ fn projectFor(state, viewer: PlayerId) -> PlayerView
     heldCard: (state.heldCard != null and viewer == currentPlayer(state)
                and state.phase == AWAIT_HELD_DECISION)
               ? state.heldCard : (state.heldCard == null ? null : HIDDEN),
-    scores: revealAll ? scoreRows(state) : null,
+    cards: faces the viewer is entitled to render,
   }
 ```
+
+**The view is the renderer's whole world.** A client that can reach past it into
+`GameState` is a client that cannot be moved onto a network, so the rule is not
+"project what is secret" but "project everything, minus what is secret". That is
+why `config`, `hostId`, `turnOrder` and `pendingSnapGive` are in the type above:
+all four are public knowledge, and the alternative was a renderer that only works
+on the authority's own machine. Round and cumulative scores ride inside
+`players[]` rather than in a separate `scores` block — one place, always present,
+`roundScore` null until the reveal fills it in.
 
 Five things that are **never** projected under any circumstances:
 

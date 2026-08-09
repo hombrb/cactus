@@ -178,3 +178,13 @@ export function projectEvent(e: Event, viewer: PlayerId): Event | null {
       return e;
   }
 }
+
+/** Redacts a whole reduction's events for one viewer, dropping the hidden ones. */
+export function projectEvents(events: readonly Event[], viewer: PlayerId): Event[] {
+  const out: Event[] = [];
+  for (const e of events) {
+    const projected = projectEvent(e, viewer);
+    if (projected !== null) out.push(projected);
+  }
+  return out;
+}

@@ -278,6 +278,7 @@ export type Event =
   | { readonly type: "RoundScored"; readonly scores: readonly { playerId: PlayerId; roundScore: number; cumulative: number }[]; readonly announcerId: PlayerId | null; readonly announcerSucceeded: boolean }
   | { readonly type: "MatchEnded"; readonly standings: readonly { playerId: PlayerId; cumulative: number; rank: number }[] }
   | { readonly type: "ConnectionChanged"; readonly playerId: PlayerId; readonly connected: boolean }
+  | { readonly type: "HostChanged"; readonly playerId: PlayerId }
   | { readonly type: "ActionRejected"; readonly playerId: PlayerId; readonly action: Action; readonly reason: string };
 
 export interface Reduction {

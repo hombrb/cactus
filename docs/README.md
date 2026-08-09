@@ -14,9 +14,10 @@ language without making a single rules decision themselves.
 - **No application.** No UI, no framework, no routes, no build system.
 - **No bot / AI design.** The engine exposes what a player was *shown*; deciding
   what to do with that is out of scope.
-- **No persistence design.** Rooms are ephemeral by nature; see
-  [10-multiplayer-and-modes.md](10-multiplayer-and-modes.md) for the (short)
-  hosting trade-offs.
+- **No persistence design.** Rooms are ephemeral by nature. The one exception is
+  forced by the deployment rather than the rules — a hibernating Durable Object
+  loses its memory — and is covered in
+  [10-multiplayer-and-modes.md](10-multiplayer-and-modes.md).
 - **No memory simulation.** The engine never remembers *for* a player. See
   [09-hidden-information.md](09-hidden-information.md).
 
@@ -106,7 +107,20 @@ result, and `tests/invariants.test.ts` checks
 seeded random games — so "the implementation matches the spec" is a claim you can
 run, not one you have to trust.
 
+`src/net/` and `worker/` implement [10](10-multiplayer-and-modes.md): the room
+authority is split so that `src/net/room-core.ts` holds every decision and
+`worker/room.ts` holds only sockets, storage and the alarm clock. That split is
+what lets `tests/room.test.ts` cover snap ordering, host promotion, timeouts and
+hibernation on a fake clock with no Cloudflare account; `scripts/check-room.mjs`
+covers the rest against a real Durable Object.
+
 Where building the app forced a decision the spec had got wrong, the spec was
 corrected rather than quietly diverged from. The `hotseat` preset became
 [`table2p`](02-rule-config.md#table2p) and [10 §6](10-multiplayer-and-modes.md#6-two-players-one-phone-flat-table)
-was rewritten for a phone lying flat between two players.
+was rewritten for a phone lying flat between two players. [10 §3](10-multiplayer-and-modes.md#3-authority)
+recommended a long-lived Node process; the hosting decision moved to Cloudflare
+Durable Objects and that section now records it, with the alternatives kept so
+they are not re-litigated. [09 §2](09-hidden-information.md#2-projecting-state)
+gained `config`, `hostId`, `turnOrder` and `pendingSnapGive` when the renderer
+was cut off from `GameState` — all four public, and all four needed by a client
+that holds nothing else.

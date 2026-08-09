@@ -3,23 +3,28 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Cactus — jeu de cartes à deux sur un téléphone",
+  "description": "Cactus \u2014 jeu de cartes \u00e0 deux sur un t\u00e9l\u00e9phone",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview --port 4173",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "icons": "node scripts/make-icons.mjs",
     "shots": "node scripts/shots.mjs",
     "check:pwa": "node scripts/check-pwa.mjs",
-    "verify": "npm run build && npm test && npm run shots && npm run check:pwa"
+    "verify": "npm run build && npm test && npm run shots && npm run check:pwa",
+    "dev:worker": "wrangler dev --port 8787 --local",
+    "check:room": "node scripts/check-room.mjs",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260809.1",
     "@types/node": "^26.2.0",
     "playwright": "^1.62.1",
     "typescript": "^5.9.3",
     "vite": "^7.1.7",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^4.120.0"
   }
 }

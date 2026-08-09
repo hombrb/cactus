@@ -1,0 +1,25 @@
+# Cloudflare Workers + Durable Objects — one Durable Object per room, which is
+# exactly the "single writer holding GameState in memory" docs/10 §3 requires.
+#
+# Durable Objects are on the Workers **free** plan since April 2025, with the
+# SQLite backend only — hence `new_sqlite_classes` below rather than
+# `new_classes`. Getting that wrong is a paid-plan error at deploy time.
+
+name = "cactus"
+main = "worker/index.ts"
+compatibility_date = "2025-04-01"
+
+# The built PWA is served by the same Worker, so the game and its authority
+# share an origin and there is no CORS to arrange.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

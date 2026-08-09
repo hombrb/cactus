@@ -36,7 +36,7 @@ import {
   validateStartNextRound,
   validateTakeDiscard,
 } from "./turn";
-import type { Action, Event, GameState, Reduction, Verdict } from "./types";
+import type { Action, Event, GameState, PlayerId, Reduction, Verdict } from "./types";
 import { OK, reject } from "./types";
 
 export function validate(s: GameState, a: Action): Verdict {
@@ -78,6 +78,22 @@ export function validate(s: GameState, a: Action): Verdict {
   }
 }
 
+/**
+ * The next connected, non-eliminated player after the departing host, in seating
+ * order. Returns null when nobody is left to promote — the room is empty and
+ * will die by TTL, so the departed host stays nominal host.
+ */
+function nextHost(s: GameState, leaving: PlayerId): PlayerId | null {
+  const from = s.turnOrder.indexOf(leaving);
+  for (let step = 1; step <= s.turnOrder.length; step++) {
+    const id = s.turnOrder[(from + step) % s.turnOrder.length]!;
+    if (id === leaving) continue;
+    const p = s.players.find((q) => q.id === id);
+    if (p && p.connected && !p.eliminated) return id;
+  }
+  return null;
+}
+
 function reduce(s: GameState, a: Action): { state: GameState; events: Event[] } {
   switch (a.type) {
     case "LobbyJoin": {
@@ -106,11 +122,19 @@ function reduce(s: GameState, a: Action): { state: GameState; events: Event[] } 
         events: [{ type: "ConnectionChanged", playerId: a.playerId, connected: true }],
       };
     }
-    case "LobbyLeave":
-      return {
-        state: withPlayer(s, a.playerId, (p) => ({ ...p, connected: false })),
-        events: [{ type: "ConnectionChanged", playerId: a.playerId, connected: false }],
-      };
+    case "LobbyLeave": {
+      const left = withPlayer(s, a.playerId, (p) => ({ ...p, connected: false }));
+      const events: Event[] = [
+        { type: "ConnectionChanged", playerId: a.playerId, connected: false },
+      ];
+      // Never block the room on one person's tab (docs/10 §2).
+      if (a.playerId !== s.hostId) return { state: left, events };
+
+      const heir = nextHost(left, a.playerId);
+      if (heir === null) return { state: left, events };
+      events.push({ type: "HostChanged", playerId: heir });
+      return { state: { ...left, hostId: heir }, events };
+    }
     case "StartMatch":
       return onStartMatch(s);
     case "PeekInitial":
@@ -196,7 +220,9 @@ export function applyAction(s: GameState, a: Action): Reduction {
   const result = reduce(s, a);
   const state: GameState = { ...result.state, actionCounter: result.state.actionCounter + 1 };
 
-  if (import.meta.env?.DEV) {
+  // Cast rather than rely on vite/client: the engine now also has to compile
+  // inside the worker, where Vite's ImportMeta typing is absent.
+  if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
     const problems = checkInvariants(state);
     if (problems.length > 0) {
       throw new Error(`engine invariant broken after ${a.type}: ${problems.join("; ")}`);

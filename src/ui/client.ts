@@ -9,7 +9,7 @@
 // is entitled to render. Flat-table holds two seats on one screen; an online
 // player holds exactly one.
 
-import { projectEvent, projectFor, type PlayerView } from "../engine/project";
+import { projectEvents, projectFor, type PlayerView } from "../engine/project";
 import { applyAction } from "../engine/reduce";
 import type { Action, Event, GameState, PlayerId } from "../engine/types";
 
@@ -40,10 +40,7 @@ export function seatUpdates(
   return seats.map((seat) => ({
     seat,
     view: projectFor(state, seat),
-    events: events.flatMap((e) => {
-      const projected = projectEvent(e, seat);
-      return projected === null ? [] : [projected];
-    }),
+    events: projectEvents(events, seat),
   }));
 }
 
