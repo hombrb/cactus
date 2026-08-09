@@ -25,9 +25,16 @@
 }
 
 /* One rule turns the opponent's whole half — including every touch target —
-   the right way up for them. */
-.half[data-seat="top"] .rotor {
+   the right way up for them. Only on the flat table: online they are not
+   sitting opposite you, they are somewhere else entirely. */
+.board[data-mode="table"] .half[data-seat="top"] .rotor {
   transform: rotate(180deg);
+}
+
+/* Online, the far half is a read-out: who they are, and the backs of their
+   cards. Its tray is emptied by the renderer; this reclaims the space. */
+.board[data-mode="remote"] .half[data-seat="top"] .tray {
+  display: none;
 }
 
 .rotor {
@@ -40,6 +47,23 @@
      layout gets cropped by the fixed viewport. */
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 6px;
+}
+
+/* Explicit rows, because auto-placement makes hiding a child dangerous: with
+   the tray display:none online, .layout slid up into the `auto` row and its
+   height became indefinite, collapsing every card to 2px — the same failure iOS
+   showed, from a different cause. Pinned, a hidden child leaves a gap instead
+   of moving its siblings. */
+.rotor > .plate {
+  grid-row: 1;
+}
+
+.rotor > .tray {
+  grid-row: 2;
+}
+
+.rotor > .layout {
+  grid-row: 3;
 }
 
 .half[data-active="true"] .plate__name {

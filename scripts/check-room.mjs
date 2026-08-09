@@ -94,8 +94,13 @@ async function main() {
   const { code } = await created.json();
   check(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(code), `minted a legible code (${code})`);
 
-  const bad = await fetch(`${WS_ORIGIN.replace("ws", "http")}/api/room/socket?code=OOPS`);
+  const bad = await fetch(`${ORIGIN}/api/room/socket?code=OOPS`);
   check(bad.status === 400, "rejects a malformed code");
+
+  // `idFromName` gives every well-formed string an object, so "unknown room"
+  // has to be an explicit check — otherwise a typo silently opens an empty one.
+  const ghost = await fetch(`${ORIGIN}/api/room/socket?code=ZZZZZZ&playerId=x&name=X`);
+  check(ghost.status === 404, "a well-formed but uncreated code is 404, not a new room");
 
   // --- two players join --------------------------------------------------
   const a = new Peer(code, "player-a", "Alice");

@@ -245,3 +245,120 @@
   background: rgba(0, 0, 0, 0.2);
   border-left: 3px solid var(--accent);
 }
+
+/* --- lobby -------------------------------------------------------------- */
+
+.screen--lobby {
+  justify-content: center;
+  gap: 26px;
+  max-width: 420px;
+  margin: 0 auto;
+  width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.brand--compact .brand__title {
+  font-size: 28px;
+}
+
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lobby__or {
+  text-align: center;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--on-felt-faint);
+  margin: 4px 0;
+}
+
+/* The code gets read aloud across a room, so it is the largest thing here. */
+.field__input--code,
+.lobby__code {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-align: center;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.lobby__codelabel {
+  text-align: center;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--on-felt-faint);
+}
+
+.lobby__code {
+  color: var(--accent);
+  padding: 10px 0;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.lobby__hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--on-felt-dim);
+  min-height: 1.2em;
+}
+
+/* --danger is tuned for fills; as text on the dark felt it is too close to the
+   background to read, so the error tint is lightened. */
+.lobby__error {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #f3a292;
+  text-align: center;
+}
+
+.lobby__players {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.lobby__player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+.lobby__player[data-you="1"]::after {
+  content: "toi";
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.lobby__player[data-host="1"]::before {
+  content: "hôte";
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--on-felt-faint);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(247, 245, 239, 0.2);
+}
+
+.lobby__player[data-away="1"] {
+  opacity: 0.5;
+}

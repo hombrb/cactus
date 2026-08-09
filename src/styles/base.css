@@ -51,6 +51,14 @@ ul {
   margin: 0;
 }
 
+/* The UA's `[hidden] { display: none }` loses to any author rule that sets
+   `display` — and `.btn` and `.lobby` both do. Without this, `el.hidden = true`
+   is silently ignored, which is how a guest ended up being shown the host's
+   start button. */
+[hidden] {
+  display: none !important;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

@@ -10,17 +10,24 @@
 // per-socket identity lives in the socket's own attachment rather than in a Map
 // that will not survive the nap.
 
-import { standard } from "../src/engine/config";
 import { newSeed } from "../src/engine/rng";
 import {
   decodeClientMessage,
   encode,
   type ServerMessage,
 } from "../src/net/protocol";
+import {
+  configForRoom,
+  defaultRoomSettings,
+  parseRoomSettings,
+} from "../src/net/room-config";
 import { RoomCore, type RoomEffects, type RoomOptions, type RoomSnapshot } from "../src/net/room-core";
 
 const SNAPSHOT_KEY = "snapshot";
 const OPTIONS_KEY = "options";
+
+const json = (body: unknown): Response =>
+  new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 
 /** How often a socket is asked to time itself, for the snap grace ordering. */
 const PING_EVERY_MS = 5_000;
@@ -48,16 +55,28 @@ export class Room implements DurableObject {
     const playerId = url.searchParams.get("playerId") ?? "";
     const name = url.searchParams.get("name") ?? "";
 
-    // Codes are minted blind and checked here — `idFromName` means an occupied
-    // code is simply an object that already has state (docs/10 §2).
-    if (url.searchParams.get("probe") === "1") {
-      // Reads storage directly rather than going through load(): a probe must
-      // not mint a seed, and must not cost a write on the free plan's budget.
-      const stored =
-        this.core?.snapshot() ?? (await this.ctx.storage.get<RoomSnapshot>(SNAPSHOT_KEY));
-      return new Response(JSON.stringify({ exists: (stored?.state ?? null) !== null }), {
-        headers: { "content-type": "application/json" },
-      });
+    // `idFromName` means every well-formed code already addresses an object, so
+    // "does this room exist?" is "has anyone created it?" — which is exactly
+    // what the options record answers.
+    if (url.searchParams.get("create") === "1") {
+      if (await this.options() !== undefined) {
+        return json({ created: false }); // collision; the caller mints another
+      }
+      const settings = parseRoomSettings(await request.json().catch(() => null));
+      // The seed is minted once per room and never leaves it: it is the stock
+      // order (docs/09 §2).
+      const options: RoomOptions = { config: configForRoom(settings), seed: newSeed() };
+      await this.ctx.storage.put(OPTIONS_KEY, options);
+      return json({ created: true });
+    }
+
+    // A code nobody created is a typo, not an invitation to open a room. This
+    // runs before the upgrade check so a plain GET answers "does this room
+    // exist?" — a failed WebSocket handshake tells the page nothing, and the
+    // lobby needs the difference between a wrong code and a started match.
+    // Room existence is not a secret: the code is meant to be read aloud.
+    if ((await this.options()) === undefined) {
+      return new Response("no such room", { status: 404 });
     }
 
     if (request.headers.get("Upgrade") !== "websocket") {
@@ -126,17 +145,20 @@ export class Room implements DurableObject {
 
   // -------------------------------------------------------------------------
 
+  private options(): Promise<RoomOptions | undefined> {
+    return this.ctx.storage.get<RoomOptions>(OPTIONS_KEY);
+  }
+
   private async load(code?: string): Promise<RoomCore> {
     if (this.core !== null) return this.core;
 
     const stored = await this.ctx.storage.get<RoomSnapshot>(SNAPSHOT_KEY);
-    let options = await this.ctx.storage.get<RoomOptions>(OPTIONS_KEY);
-    if (options === undefined) {
-      // The seed is minted once per room and never leaves it: it is the stock
-      // order (docs/09 §2).
-      options = { config: standard, seed: newSeed() };
-      await this.ctx.storage.put(OPTIONS_KEY, options);
-    }
+    // Only reachable after the create call wrote the options, or on a socket
+    // that already passed the existence check.
+    const options = (await this.options()) ?? {
+      config: configForRoom(defaultRoomSettings),
+      seed: newSeed(),
+    };
 
     const snapshot: RoomSnapshot = stored ?? {
       code: code ?? "",

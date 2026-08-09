@@ -16,7 +16,9 @@
     "verify": "npm run build && npm test && npm run shots && npm run check:pwa",
     "dev:worker": "wrangler dev --port 8787 --local",
     "check:room": "node scripts/check-room.mjs",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "check:lobby": "node scripts/check-lobby.mjs",
+    "check:online": "npm run check:room && npm run check:lobby"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260809.1",

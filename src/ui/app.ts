@@ -1,34 +1,35 @@
 import { newSeed } from "../engine/rng";
 import { createMatch } from "../engine/turn";
+import type { RoomSettings } from "../net/room-config";
+import { LocalClient, type GameClient } from "./client";
 import { Board } from "./game/board";
+import { renderLobby } from "./screens/lobby";
 import { renderMenu } from "./screens/menu";
 import { renderRules } from "./screens/rules";
 import { renderSettings } from "./screens/settings";
-import { LocalClient, type GameClient } from "./client";
 import { configFrom, loadSettings, saveSettings, type Settings } from "./settings";
 
-type Screen = "menu" | "rules" | "settings" | "game";
+type Screen = "menu" | "rules" | "settings" | "lobby" | "game";
 
 export class App {
   private settings: Settings = loadSettings();
   private board: Board | null = null;
   private client: GameClient | null = null;
+  private disposeScreen: (() => void) | null = null;
 
   constructor(private readonly root: HTMLElement) {
     this.go("menu");
   }
 
   private go(screen: Screen): void {
-    this.board?.destroy();
-    this.board = null;
-    this.client?.destroy();
-    this.client = null;
+    this.teardown();
     this.root.dataset.screen = screen;
 
     switch (screen) {
       case "menu":
         renderMenu(this.root, {
           onPlay: () => this.go("game"),
+          onOnline: () => this.go("lobby"),
           onRules: () => this.go("rules"),
           onSettings: () => this.go("settings"),
         });
@@ -50,13 +51,40 @@ export class App {
         );
         break;
 
+      case "lobby":
+        this.disposeScreen = renderLobby(this.root, {
+          defaultName: this.settings.names[0],
+          settings: this.roomSettings(),
+          onBack: () => this.go("menu"),
+          onPlay: (client) => this.startOnline(client),
+        });
+        break;
+
       case "game":
-        this.startGame();
+        this.startLocal();
         break;
     }
   }
 
-  private startGame(): void {
+  /** The host's own preferences become the room's rules (docs/10 §2). */
+  private roomSettings(): RoomSettings {
+    return {
+      preset: this.settings.preset,
+      snap: this.settings.snap,
+      scoreLimit: this.settings.scoreLimit,
+    };
+  }
+
+  private teardown(): void {
+    this.disposeScreen?.();
+    this.disposeScreen = null;
+    this.board?.destroy();
+    this.board = null;
+    this.client?.destroy();
+    this.client = null;
+  }
+
+  private startLocal(): void {
     const [name1, name2] = this.settings.names;
     // ?seed=... makes a deal reproducible, which is how the screenshot script
     // drives a specific situation. Harmless in production: the seed is only
@@ -75,9 +103,23 @@ export class App {
       }),
     );
 
+    this.mount(client);
+    client.dispatch({ type: "StartMatch", playerId: "p1" });
+  }
+
+  /**
+   * The lobby hands over a client that is already connected and already past
+   * LOBBY, so unlike the local game there is nothing left to dispatch.
+   */
+  private startOnline(client: GameClient): void {
+    this.teardown();
+    this.root.dataset.screen = "game";
+    this.mount(client);
+  }
+
+  private mount(client: GameClient): void {
     this.root.innerHTML = "";
     this.client = client;
     this.board = new Board(this.root, client, () => this.go("menu"));
-    client.dispatch({ type: "StartMatch", playerId: "p1" });
   }
 }
