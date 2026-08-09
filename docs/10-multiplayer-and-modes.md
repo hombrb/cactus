@@ -260,8 +260,18 @@ nothing that a grant was protecting.
   nearest cards, at their own end, at the same time. The `INITIAL_PEEK` barrier
   already tolerates any ordering
   ([05 §4](05-engine-core.md#4-the-initial-peek-barrier)).
-- **`EndTurn` is still explicit**, and `cfg.timing.endOfTurnWindowMs` is `null`:
-  the end-of-turn window closes when a human presses the button, never on a timer.
+- **`EndTurn` is implicit.** It used to be a button, because `TURN_END` was the
+  only moment you could say "Cactus". With the announcement window open into the
+  next player's turn ([01 §7](01-rules-reference.md#7-ending-the-round)) that
+  moment has nothing left in it, so the board ends the turn itself, after just
+  long enough for the card that moved to land. The action is unchanged and still
+  goes through the authority — it is the *client* that stops waiting for a
+  human, which is why replays and the action log are untouched. Under the strict
+  `END_OF_TURN` rule the button comes back.
+- **The "Cactus" offer follows the player, not the turn.** After you play it
+  stays on your own half while the other player takes theirs, and it goes when
+  they finish. On the flat table that means both halves can show a live button
+  at once — the current player's, and the previous player's.
 - **Trust is physical.** Nothing stops a player from leaning over. The mode is for
   two people who want to play, not for strangers.
 

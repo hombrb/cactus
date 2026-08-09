@@ -107,6 +107,18 @@ describe("room settings", () => {
     expect(cfg.powers.map).toEqual(standard.powers.map);
     expect(cfg.deck.seedDiscard).toBe(true);
     expect(cfg.turn.takeFromDiscard).toBe(true);
+    expect(cfg.announce.timing).toBe("AFTER_TURN");
+  });
+
+  it("carries the host's choice of when Cactus may be said", () => {
+    // The guest is playing the host's rules, and this one changes when a turn
+    // ends as well as when the announcement closes (docs/01 §7).
+    expect(configForRoom(parseRoomSettings({ announceAfterTurn: false })).announce.timing).toBe(
+      "END_OF_TURN",
+    );
+    expect(configForRoom(parseRoomSettings({ announceAfterTurn: true })).announce.timing).toBe(
+      "AFTER_TURN",
+    );
   });
 
   it("cannot be talked into a rule the game does not have", () => {

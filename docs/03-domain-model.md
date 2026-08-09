@@ -179,6 +179,7 @@ type GameState {
 
   announcerId:       PlayerId?
   finalLapRemaining: int?          // null until an announcement
+  previousPlayerId:  PlayerId?     // who ended the last turn — the Cactus window (01 §7)
 
   rngSeed:           string
   rngCursor:         int
@@ -198,6 +199,11 @@ Notes on three fields that carry most of the subtlety:
   changes. Treating it as a phase would duplicate the entire turn state machine.
 - **`lockedSlots`** prevents a snap from yanking a card out from under a swap that
   is already in flight.
+- **`previousPlayerId`** is the announcement window, stored as the one fact that
+  defines it: under `announce.timing = AFTER_TURN` the player who ended the last
+  turn may still say "Cactus". Nothing has to close the window, because the next
+  `TURN_END` overwrites it. Public knowledge — everybody watched that player
+  finish — so it ships in `PlayerView` whole.
 
 ## 6. Actions
 

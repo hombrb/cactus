@@ -62,6 +62,8 @@ export interface PlayerView {
   readonly pendingSnapGive: PendingSnapGive | null;
   readonly announcerId: PlayerId | null;
   readonly finalLapRemaining: number | null;
+  /** Public: everyone watched that player finish. See `GameState`. */
+  readonly previousPlayerId: PlayerId | null;
   readonly cards: Readonly<Record<CardId, Card>>;
 }
 
@@ -136,6 +138,7 @@ export function projectFor(s: GameState, viewer: PlayerId): PlayerView {
     pendingSnapGive: s.pendingSnapGive,
     announcerId: s.announcerId,
     finalLapRemaining: s.finalLapRemaining,
+    previousPlayerId: s.previousPlayerId,
     cards,
   };
 }

@@ -23,6 +23,8 @@ export interface RoomSettings {
   readonly powers: PowerMap | null;
   readonly seedDiscard: boolean;
   readonly takeFromDiscard: boolean;
+  /** The turn ends by itself, and "Cactus" can still be said after it. */
+  readonly announceAfterTurn: boolean;
 }
 
 export const defaultRoomSettings: RoomSettings = {
@@ -32,6 +34,7 @@ export const defaultRoomSettings: RoomSettings = {
   powers: null,
   seedDiscard: true,
   takeFromDiscard: true,
+  announceAfterTurn: true,
 };
 
 const MAX_SCORE_LIMIT = 1000;
@@ -54,6 +57,7 @@ export function parseRoomSettings(raw: unknown): RoomSettings {
     powers: parsePowerMap(input.powers),
     seedDiscard: input.seedDiscard !== false,
     takeFromDiscard: input.takeFromDiscard !== false,
+    announceAfterTurn: input.announceAfterTurn !== false,
   };
 }
 
@@ -73,6 +77,10 @@ export function configForRoom(settings: RoomSettings): RuleConfig {
       deck: { ...base.deck, seedDiscard: settings.seedDiscard },
       turn: { ...base.turn, takeFromDiscard: settings.takeFromDiscard },
       snap: { ...base.snap, enabled: settings.snap },
+      announce: {
+        ...base.announce,
+        timing: settings.announceAfterTurn ? "AFTER_TURN" : "END_OF_TURN",
+      },
     },
     settings.powers,
   );

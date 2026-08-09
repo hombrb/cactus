@@ -27,6 +27,9 @@ The acceptance criteria for the spec. If an implementation handles every row of
 | 16 | Layout grows past `handSize` via penalties or `GIVE_CARD` | Fully supported: holes are reused before appending; scoring and targeting iterate. UI must not assume 4 | [06 §8](06-powers.md#8-declining-and-misusing) |
 | 17 | Two-player game, one announces | `finalLapRemaining = 1`; the opponent takes one turn; reveal | [05 §6](05-engine-core.md#6-announcing) |
 | 18 | A second player tries to announce | Rejected `ALREADY_ANNOUNCED`. There is no counter-announcement in this spec | [05 §6](05-engine-core.md#6-announcing) |
+| 18a | `AFTER_TURN`: announcing while the next player is mid-turn | Accepted. Their turn is untouched and is already the first of the final lap, so the lap comes out exactly as it would have one action earlier | [05 §6](05-engine-core.md#6-announcing) |
+| 18b | `AFTER_TURN`: announcing after the next player has finished | Rejected `NOT_YOUR_TURN` — `previousPlayerId` has moved to them | [05 §6](05-engine-core.md#6-announcing) |
+| 18c | `AFTER_TURN`: the round ends before you announce (stock death, emptied layout) | The window does not survive into `REVEAL`; nobody announced, and scoring takes the no-announcer branch | [05 §6](05-engine-core.md#6-announcing) |
 | 19 | The announcer tries to play again | `advanceTurn` skips them; any action from them is `NOT_YOUR_TURN`. They may still snap | [05 §7](05-engine-core.md#7-ending-a-turn) |
 | 20 | The announcer snaps during the final lap | Legal by default (`snap.allowedDuringFinalLap`) | [07 §7](07-snap.md#7-snap-and-the-end-of-the-round) |
 | 21 | Round ends while a player holds a drawn card | `beginReveal` returns the held card to the discard so conservation holds | [08 §2](08-scoring.md#2-entering-the-reveal) |
@@ -84,6 +87,7 @@ too — it is O(deck).
 | `actionCounter` increments exactly once per accepted action | Timeout tokens |
 | `finalLapRemaining` is `null`, or decreases monotonically to 0 | The round must terminate |
 | `finalLapRemaining != null` **implies** `announcerId != null` | They are set together |
+| `previousPlayerId` is `null` or a player in `turnOrder` | It is the announcement window; a stale id hands it to nobody |
 | `currentPlayerIndex` points at a non-eliminated player, and never at the announcer once `announcerId` is set | `advanceTurn`'s contract |
 | Every layout has at least `cfg.deck.handSize` slots (some possibly `EMPTY`) | Slots are never spliced out |
 | `roundScore != null` for all active players **iff** `phase in {ROUND_END, MATCH_END}` | Scoring ran exactly once |

@@ -49,6 +49,15 @@ interface HalfRefs {
 
 const REVEAL_PHASES = new Set(["REVEAL", "ROUND_END", "MATCH_END"]);
 
+/**
+ * How long `TURN_END` is left on screen before the turn ends by itself.
+ *
+ * Not a rule — the rule is `announce.timing`, and the announcement window
+ * outlives this by a whole turn. It is only long enough for the card that just
+ * moved to land, so the handover does not happen underneath it.
+ */
+const AUTO_END_MS = 260;
+
 /** A planned movement, with the source measured before the board was repainted. */
 interface Departure {
   readonly flight: Flight;
@@ -75,6 +84,7 @@ export class Board {
   /** The card the finger is holding, if any, and where it came from. */
   private drag: DragHandle | null = null;
   private dragFrom: Anchor | null = null;
+  private autoEndTimer: number | null = null;
   private menuOpenFor: PlayerId | null = null;
   private unsubscribe: () => void;
 
@@ -166,6 +176,7 @@ export class Board {
 
   destroy(): void {
     this.unsubscribe();
+    if (this.autoEndTimer !== null) clearTimeout(this.autoEndTimer);
     this.flights.destroy();
     this.root.innerHTML = "";
   }
@@ -297,6 +308,20 @@ export class Board {
     return actingSeat(this.primaryView(), this.client.seats);
   }
 
+  /**
+   * Whether this player has played and may still say "Cactus" — the affordance
+   * for `inAnnounceWindow` in the engine, which has the last word. Kept here
+   * rather than imported so the board never reaches past a `PlayerView`.
+   */
+  private canAnnounceLate(view: PlayerView, playerId: PlayerId): boolean {
+    return (
+      view.config.announce.timing === "AFTER_TURN" &&
+      view.announcerId === null &&
+      view.previousPlayerId === playerId &&
+      view.players.find((p) => p.id === playerId)?.eliminated === false
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Animation
   //
@@ -423,6 +448,36 @@ export class Board {
     // A layout that grew was rebuilt from scratch, so a flight may be on its way
     // to a node that no longer exists.
     this.flights.prune();
+    this.endTurnIfNothingLeftToDecide();
+  }
+
+  /**
+   * `TURN_END` exists so a player can say "Cactus" before handing over. Once the
+   * announcement outlives the turn (`AFTER_TURN`, docs/01 §7) there is nothing
+   * left to decide there, so the phase is passed through rather than parked in,
+   * and the game moves on by itself.
+   *
+   * Deferred by a timer for two reasons: dispatching inside a subscribe callback
+   * would re-enter the client's own listener loop, and the card that just landed
+   * deserves to be seen arriving before the board says it is somebody else's
+   * turn.
+   */
+  private endTurnIfNothingLeftToDecide(): void {
+    const view = this.primaryView();
+    if (view.config.announce.timing === "END_OF_TURN") return;
+    if (view.phase !== "TURN_END") return;
+    // Only the phone whose turn it is; on a shared table that is still exactly
+    // one of the two halves.
+    const actor = this.actor();
+    if (actor === null || this.autoEndTimer !== null) return;
+
+    this.autoEndTimer = window.setTimeout(() => {
+      this.autoEndTimer = null;
+      const now = this.primaryView();
+      if (now.phase !== "TURN_END") return; // a snap, or somebody beat us to it
+      const current = actingSeat(now, this.client.seats);
+      if (current !== null) this.dispatch({ type: "EndTurn", playerId: current });
+    }, AUTO_END_MS);
   }
 
   private patchMiddle(view: PlayerView): void {
@@ -734,6 +789,17 @@ export class Board {
       } else if (!prompt) {
         prompt = `Au tour de ${view.players.find((p) => p.id === view.currentPlayer)?.name ?? ""}`;
       }
+
+      // You have played, the next player is playing, and it is not too late:
+      // the offer stands until they finish (docs/01 §7).
+      if (!isCurrent && this.canAnnounceLate(view, half.playerId)) {
+        prompt = prompt ? `${prompt} · encore temps de dire cactus` : prompt;
+        buttons.push({
+          label: "Cactus !",
+          kind: "accent",
+          run: () => this.dispatch({ type: "AnnounceCactus", playerId: half.playerId }),
+        });
+      }
     }
 
     half.prompt.textContent = prompt;
@@ -833,6 +899,13 @@ export class Board {
         return { prompt: "Donne une de tes cartes", buttons };
 
       case "TURN_END":
+        // With the announcement window open past the handover there is nothing
+        // left to confirm here: the board ends the turn itself, and the "Cactus"
+        // offer reappears on this half a moment later, for as long as the next
+        // player takes. Putting a button here too would flash it for 260 ms.
+        if (view.config.announce.timing !== "END_OF_TURN") {
+          return { prompt: "Fin de ton tour", buttons };
+        }
         if (view.announcerId === null) {
           buttons.push({ label: "Cactus !", kind: "accent", run: () => this.dispatch({ type: "AnnounceCactus", playerId: me }) });
         }

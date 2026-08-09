@@ -66,6 +66,18 @@ export function candidates(s: GameState): Action[] {
       break;
   }
 
+  // The announcement outlives the turn that earned it, so it is not tied to a
+  // phase: whoever just played may say it while somebody else is mid-turn
+  // (docs/01 §7). Offered here so the sweep interleaves it with everything else.
+  if (
+    s.config.announce.timing === "AFTER_TURN" &&
+    s.announcerId === null &&
+    s.previousPlayerId !== null &&
+    s.previousPlayerId !== me
+  ) {
+    out.push({ type: "AnnounceCactus", playerId: s.previousPlayerId });
+  }
+
   // Snaps can fire from anyone, at any in-round moment — including wrong ones.
   if (s.config.snap.enabled && s.discard.length > 0) {
     for (const p of s.players) {

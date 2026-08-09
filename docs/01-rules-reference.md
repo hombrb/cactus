@@ -156,16 +156,30 @@ after an announcement. → the whole `snap` config group.
 
 ## 7. Ending the round
 
-At the **end of your turn**, you may announce **"Cactus"**.
+Once you have **played your turn**, you may announce **"Cactus"**.
 
 - Every other player then takes **exactly one more turn** (the **final lap**), in
   normal clockwise order.
 - The announcer does **not** play again.
 - Then all layouts are revealed and scored.
 
-*Disagreement:* some tables allow announcing *instead of* taking a turn; some
-require you to believe you are under a threshold (5 or 6) before you may announce;
-some allow a "contre-Cactus" challenge by another player.
+**How late is too late.** At a table nobody ends their turn formally: you play,
+and you say it, and the others let you as long as none of them has gone yet. So
+the deadline is **the next player finishing their turn** — until then the
+announcement is still yours to make, and its effect is identical to having made
+it the moment you put your card down (the lap counts the same turns either way).
+Once they have finished, the window has moved to them.
+
+→ `announce.timing = AFTER_TURN`, the default. Two consequences worth naming:
+the round needs no "end my turn" step at all, since nothing is left to decide
+once you have played; and the announcement is the one action a player takes
+while it is not their turn.
+
+*Disagreement:* stricter tables close the window at the end of your own turn,
+which then has to be ended explicitly (`END_OF_TURN`); some allow announcing
+*instead of* taking a turn (`INSTEAD_OF_TURN`); some require you to believe you
+are under a threshold (5 or 6) before you may announce; some allow a
+"contre-Cactus" challenge by another player.
 → `announce.timing`, `announce.requiresThreshold`.
 
 ## 8. Scoring

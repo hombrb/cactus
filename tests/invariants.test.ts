@@ -20,7 +20,12 @@ function playGame(cfg: RuleConfig, seed: string, playerCount: number): GameState
   });
 
   let cursor = 0;
-  for (let step = 0; step < 4000; step++) {
+  // A runaway guard, not a budget — a game that has not finished by here is a
+  // bug. It went up when the sweep started announcing "Cactus" from the window
+  // that outlives a turn: a random player announcing constantly keeps the
+  // announcer's round score at zero, so rounds get shorter and a match to 100
+  // points takes many more of them.
+  for (let step = 0; step < 20000; step++) {
     if (s.phase === "MATCH_END") break;
 
     const options = candidates(s);

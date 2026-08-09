@@ -22,7 +22,7 @@ is French and must stay French.
 ```bash
 npm install
 npm run dev                       # dev server
-npm test                          # 84 tests, ~5 s
+npm test                          # 99 tests, ~5 s
 npm run build                     # typecheck (app + worker) + vite build
 npm run preview                   # needed by the two scripts below
 npm run shots                     # Chromium at 390×844, fails on clipped cards — Chromium ONLY
@@ -31,7 +31,7 @@ npm run verify                    # all of the above
 
 npm run dev:worker                # wrangler dev on :8787, serves dist/ + /api
 npm run check:room                # 29 protocol checks over raw sockets
-npm run check:lobby               # 29 checks driving two browsers through the UI
+npm run check:lobby               # 33 checks driving two browsers through the UI
 npm run check:online              # both of the above
 ```
 
@@ -87,6 +87,16 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
   face up on arrival, and cards that fly between the places they moved between:
   `src/ui/game/flights.ts` says what moved, `src/ui/game/flight.ts` draws it in
   a layer of its own, and a fast discard follows the finger. See docs/10 §6.
+- **The turn ends by itself, and "Cactus" outlives it.** `announce.timing` gains
+  `AFTER_TURN` (now the default): you may announce once you have played and
+  still while the next player takes their turn, until *they* end theirs. That is
+  what a table actually does, and the lap arithmetic comes out identical either
+  way — `tests/announce.test.ts` asserts the equivalence, which is what makes
+  the wider window an affordance rather than a variant. Since `TURN_END` then
+  has nothing left to decide, the board ends the turn itself; the `EndTurn`
+  action is unchanged, so replays are too. `Réglages → Fin de tour automatique`
+  turns it off, and the host's choice reaches a room. New state field:
+  `previousPlayerId`.
 - **Powers that target an opponent work in a room.** They never did: the board
   gated every slot gesture on "is this seat mine", so with one seat per device
   the opponent's half accepted no input at all and `PEEK_OPPONENT` / the second
@@ -94,12 +104,13 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
   answers "which seat may act" and "which slot may be aimed at" separately.
   docs/10 §3 records the rule; `tests/targeting.test.ts` and both online checks
   cover it.
-- **Tests**: 84 in `npm test` — the 37-step worked trace, the invariant sweep
+- **Tests**: 99 in `npm test` — the 37-step worked trace, the invariant sweep
   (now including an assembled config: custom powers, no opening discard, stock
-  only), the projection/wire-format sweep, 21 room tests, 15 config tests
-  covering what a client is allowed to ask for, 12 on who may aim at what, and
-  13 on events → card movements. Plus 29 protocol checks and 29 two-browser
-  checks against a real Durable Object.
+  only, and the late announcement interleaved with everything else), the
+  projection/wire-format sweep, 21 room tests, 15 config tests covering what a
+  client is allowed to ask for, 14 on the announcement window, 12 on who may aim
+  at what, and 13 on events → card movements. Plus 29 protocol checks and 33
+  two-browser checks against a real Durable Object.
 
 ### Known gaps (deliberate, not forgotten)
 

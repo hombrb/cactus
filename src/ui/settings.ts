@@ -12,6 +12,8 @@ export interface Settings {
   powers: PowerMap | null;
   seedDiscard: boolean;
   takeFromDiscard: boolean;
+  /** The turn ends by itself, and "Cactus" can still be said after it. */
+  announceAfterTurn: boolean;
 }
 
 const KEY = "cactus.settings.v1";
@@ -24,6 +26,7 @@ export const defaultSettings: Settings = {
   powers: null,
   seedDiscard: true,
   takeFromDiscard: true,
+  announceAfterTurn: true,
 };
 
 export function loadSettings(): Settings {
@@ -48,6 +51,7 @@ export function loadSettings(): Settings {
       powers: parsePowerMap(parsed.powers),
       seedDiscard: parsed.seedDiscard !== false,
       takeFromDiscard: parsed.takeFromDiscard !== false,
+      announceAfterTurn: parsed.announceAfterTurn !== false,
     };
   } catch {
     return { ...defaultSettings };
@@ -70,6 +74,10 @@ export function configFrom(s: Settings): RuleConfig {
       ...forTable(base, s.snap),
       deck: { ...base.deck, seedDiscard: s.seedDiscard },
       turn: { ...base.turn, takeFromDiscard: s.takeFromDiscard },
+      announce: {
+        ...base.announce,
+        timing: s.announceAfterTurn ? "AFTER_TURN" : "END_OF_TURN",
+      },
     },
     s.powers,
   );
