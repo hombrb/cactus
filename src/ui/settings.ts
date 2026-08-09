@@ -1,5 +1,5 @@
-import { forTable, school, standard } from "../engine/config";
-import type { RuleConfig } from "../engine/types";
+import { forTable, parsePowerMap, school, standard, withPowerMap } from "../engine/config";
+import type { PowerMap, RuleConfig } from "../engine/types";
 
 export type PresetName = "standard" | "school";
 
@@ -8,6 +8,10 @@ export interface Settings {
   snap: boolean;
   names: [string, string];
   scoreLimit: number | null;
+  /** null keeps the preset's own powers — see `src/ui/screens/powers.ts`. */
+  powers: PowerMap | null;
+  seedDiscard: boolean;
+  takeFromDiscard: boolean;
 }
 
 const KEY = "cactus.settings.v1";
@@ -17,6 +21,9 @@ export const defaultSettings: Settings = {
   snap: true,
   names: ["Joueur 1", "Joueur 2"],
   scoreLimit: 100,
+  powers: null,
+  seedDiscard: true,
+  takeFromDiscard: true,
 };
 
 export function loadSettings(): Settings {
@@ -35,6 +42,12 @@ export function loadSettings(): Settings {
         parsed.scoreLimit === null || typeof parsed.scoreLimit === "number"
           ? parsed.scoreLimit
           : defaultSettings.scoreLimit,
+      // Added after v1 shipped. Absent in stored settings, so both the missing
+      // case and a hand-edited one have to degrade quietly rather than throw —
+      // hence no key bump and no migration.
+      powers: parsePowerMap(parsed.powers),
+      seedDiscard: parsed.seedDiscard !== false,
+      takeFromDiscard: parsed.takeFromDiscard !== false,
     };
   } catch {
     return { ...defaultSettings };
@@ -52,7 +65,14 @@ export function saveSettings(s: Settings): void {
 /** Settings → the engine's RuleConfig, always in flat-table timing. */
 export function configFrom(s: Settings): RuleConfig {
   const base = s.preset === "school" ? school : standard;
-  const cfg = forTable(base, s.snap);
+  const cfg = withPowerMap(
+    {
+      ...forTable(base, s.snap),
+      deck: { ...base.deck, seedDiscard: s.seedDiscard },
+      turn: { ...base.turn, takeFromDiscard: s.takeFromDiscard },
+    },
+    s.powers,
+  );
   if (s.preset === "school") return cfg;
   return { ...cfg, match: { ...cfg.match, scoreLimit: s.scoreLimit } };
 }

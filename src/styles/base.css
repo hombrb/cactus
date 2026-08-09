@@ -11,10 +11,39 @@ body {
   height: 100%;
   overflow: hidden; /* the board never scrolls */
   overscroll-behavior: none;
-  background: var(--felt-deep);
+}
+
+/**
+ * The felt lives on the root element, not on `#app`.
+ *
+ * A root background is propagated to the canvas, which is painted over the
+ * whole surface — including any strip iOS leaves outside the layout viewport in
+ * a standalone web app. `#app` is `position: fixed; inset: 0`, so it only ever
+ * covered the layout viewport, and the leftover band showed the flat
+ * `--felt-deep` underneath: darker than the gradient's own bottom edge, with a
+ * hard seam. That seam was the dark bar at the bottom of an installed iPhone
+ * app.
+ *
+ * Two things keep it gone, and both matter:
+ *   - the gradient reaches `--felt-deep` *before* the edges, so the canvas fill
+ *     colour and the visible edge are the same colour and no seam can show;
+ *   - `body` must stay transparent — it is `height: 100%`, so any background of
+ *     its own would repaint a flat rectangle over this one.
+ */
+html {
+  background-color: var(--felt-deep);
+  background-image: radial-gradient(
+    135% 95% at 50% 46%,
+    var(--felt-light) 0%,
+    var(--felt) 42%,
+    var(--felt-deep) 88%
+  );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 body {
+  background: transparent;
   font-family: var(--font);
   color: var(--on-felt);
   -webkit-font-smoothing: antialiased;
@@ -29,9 +58,9 @@ body {
   inset: 0;
   display: flex;
   flex-direction: column;
-  /* The felt reaches under the notch; padding is restored per side. */
-  background:
-    radial-gradient(120% 70% at 50% 50%, var(--felt-light) 0%, var(--felt) 45%, var(--felt-deep) 100%);
+  /* Transparent on purpose: the felt is on the root, so it also covers whatever
+     iOS paints beyond this element. Padding is restored per side. */
+  background: none;
 }
 
 button {

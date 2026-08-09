@@ -95,6 +95,9 @@ export class Board {
       this.dispatch({ type: "DrawStock", playerId: this.currentId() });
     });
     this.middle.querySelector(".pile--discard")!.addEventListener("click", () => {
+      // The pile is only ever a draw source; when the rule is off it is scenery,
+      // and dispatching would just earn an ActionRejected.
+      if (!this.primaryView().config.turn.takeFromDiscard) return;
       this.dispatch({ type: "TakeDiscard", playerId: this.currentId() });
     });
 
@@ -259,7 +262,10 @@ export class Board {
     this.middle.querySelector(".pile--stock")!.toggleAttribute("data-live", actionable);
     this.middle
       .querySelector(".pile--discard")!
-      .toggleAttribute("data-live", actionable && view.discard.length > 0);
+      .toggleAttribute(
+        "data-live",
+        actionable && view.discard.length > 0 && view.config.turn.takeFromDiscard,
+      );
   }
 
   private patchHalf(half: HalfRefs, view: PlayerView): void {
@@ -527,7 +533,12 @@ export class Board {
 
     switch (view.phase) {
       case "TURN_START":
-        return { prompt: "Pioche ou prends la défausse", buttons };
+        return {
+          prompt: view.config.turn.takeFromDiscard
+            ? "Pioche ou prends la défausse"
+            : "Pioche une carte",
+          buttons,
+        };
 
       case "AWAIT_HELD_DECISION": {
         const revealed = half.trayCard.dataset.revealed === "1";

@@ -1,12 +1,17 @@
 // What the host is allowed to choose when opening a room.
 //
-// The client sends these three answers, never a `RuleConfig`. The server builds
-// the config from its own presets, so a client cannot invent a rule — it can
-// only pick from the ones the game already has. That also keeps the create
-// request tiny and the validation obvious.
+// The client sends these answers, never a `RuleConfig`. The server builds the
+// config from its own presets, so a client cannot invent a rule — it can only
+// pick from the ones the game already has. That also keeps the create request
+// tiny and the validation obvious.
+//
+// The power map is the one answer with structure, and it does not weaken that:
+// `parsePowerMap` allow-lists both the rank keys and the power kinds against
+// the engine's own lists, so the client picks a rank and a power out of a fixed
+// menu rather than describing a rule.
 
-import { school, standard } from "../engine/config";
-import type { RuleConfig } from "../engine/types";
+import { parsePowerMap, school, standard, withPowerMap } from "../engine/config";
+import type { PowerMap, RuleConfig } from "../engine/types";
 
 export type PresetName = "standard" | "school";
 
@@ -14,12 +19,19 @@ export interface RoomSettings {
   readonly preset: PresetName;
   readonly snap: boolean;
   readonly scoreLimit: number | null;
+  /** null keeps the preset's own powers. */
+  readonly powers: PowerMap | null;
+  readonly seedDiscard: boolean;
+  readonly takeFromDiscard: boolean;
 }
 
 export const defaultRoomSettings: RoomSettings = {
   preset: "standard",
   snap: true,
   scoreLimit: 100,
+  powers: null,
+  seedDiscard: true,
+  takeFromDiscard: true,
 };
 
 const MAX_SCORE_LIMIT = 1000;
@@ -39,6 +51,9 @@ export function parseRoomSettings(raw: unknown): RoomSettings {
         : limit === null
           ? null
           : defaultRoomSettings.scoreLimit,
+    powers: parsePowerMap(input.powers),
+    seedDiscard: input.seedDiscard !== false,
+    takeFromDiscard: input.takeFromDiscard !== false,
   };
 }
 
@@ -52,9 +67,17 @@ export function parseRoomSettings(raw: unknown): RoomSettings {
  */
 export function configForRoom(settings: RoomSettings): RuleConfig {
   const base = settings.preset === "school" ? school : standard;
-  const withSnap: RuleConfig = { ...base, snap: { ...base.snap, enabled: settings.snap } };
+  const tuned: RuleConfig = withPowerMap(
+    {
+      ...base,
+      deck: { ...base.deck, seedDiscard: settings.seedDiscard },
+      turn: { ...base.turn, takeFromDiscard: settings.takeFromDiscard },
+      snap: { ...base.snap, enabled: settings.snap },
+    },
+    settings.powers,
+  );
   // The school preset counts rounds instead of points, so a score limit would
   // be a contradiction rather than a setting.
-  if (settings.preset === "school") return withSnap;
-  return { ...withSnap, match: { ...withSnap.match, scoreLimit: settings.scoreLimit } };
+  if (settings.preset === "school") return tuned;
+  return { ...tuned, match: { ...tuned.match, scoreLimit: settings.scoreLimit } };
 }

@@ -22,7 +22,7 @@ is French and must stay French.
 ```bash
 npm install
 npm run dev                       # dev server
-npm test                          # 42 tests, ~4 s
+npm test                          # 59 tests, ~5 s
 npm run build                     # typecheck (app + worker) + vite build
 npm run preview                   # needed by the two scripts below
 npm run shots                     # Chromium at 390×844, fails on clipped cards — Chromium ONLY
@@ -31,7 +31,7 @@ npm run verify                    # all of the above
 
 npm run dev:worker                # wrangler dev on :8787, serves dist/ + /api
 npm run check:room                # 24 protocol checks over raw sockets
-npm run check:lobby               # 20 checks driving two browsers through the UI
+npm run check:lobby               # 22 checks driving two browsers through the UI
 npm run check:online              # both of the above
 ```
 
@@ -57,6 +57,12 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 
 - **Engine**: unchanged this session except for host promotion. Full `standard`
   and `school` rulesets, all powers, snap, scoring.
+- **Rules are choosable, not just presets.** `Réglages → Pouvoirs` edits
+  `powers.map` rank by rank, and `deck.seedDiscard` / `turn.takeFromDiscard`
+  turn the opening face-up card and taking the discard on and off. A preset is
+  now a starting point plus overrides; the host's choices reach a room intact
+  and are named back to the guest in the lobby. See
+  [docs/02 §Choosing a config](docs/02-rule-config.md#choosing-a-config).
 - **The renderer no longer knows what a `GameState` is.** `board.ts` reads only
   `PlayerView`s obtained from a `GameClient`. This was the point of the whole
   refactor: the flat-table mode now goes through per-seat `projectFor` and
@@ -73,9 +79,11 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 - **The lobby** (`src/ui/screens/lobby.ts`): create a room with the host's own
   rules, join by code, player list, host-only start. Identity is
   `src/ui/identity.ts`.
-- **Tests**: 42 in `npm test` — the 37-step worked trace, the invariant sweep,
-  the projection/wire-format sweep, and 20 room tests. Plus 24 protocol checks
-  and 20 two-browser checks against a real Durable Object.
+- **Tests**: 59 in `npm test` — the 37-step worked trace, the invariant sweep
+  (now including an assembled config: custom powers, no opening discard, stock
+  only), the projection/wire-format sweep, 21 room tests, and 15 config tests
+  covering what a client is allowed to ask for. Plus 24 protocol checks and 22
+  two-browser checks against a real Durable Object.
 
 ### Known gaps (deliberate, not forgotten)
 
@@ -86,7 +94,9 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 - **No room TTL.** An abandoned Durable Object idles for free, so this is
   tidiness rather than cost — but docs/10 §2 promises one.
 - `snap.allowOnOpponent` and the Ace `GIVE_CARD` power remain implemented,
-  off by default, and never exercised in a real game. Still untested.
+  off by default, and never exercised in a real game. Still untested — which is
+  why `GIVE_CARD` is deliberately absent from `SELECTABLE_POWERS` and cannot be
+  reached from the powers editor.
 - The board is still a two-sided flat table. 3–8 players is phase 5.
 - No CI. The two commands above are the gate, and neither of them can see
   Safari — see trap 12.
@@ -98,8 +108,11 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 Asked and answered, so do not re-open without a reason:
 
 - **The host picks the rules** at creation, from their own settings. The client
-  sends `preset` / `snap` / `scoreLimit`, never a `RuleConfig`, so it can choose
-  among the game's rules but not invent one.
+  sends answers — `preset`, `snap`, `scoreLimit`, `powers`, `seedDiscard`,
+  `takeFromDiscard` — never a `RuleConfig`, so it can choose among the game's
+  rules but not invent one. `powers` is the one answer with structure, and
+  `parsePowerMap` allow-lists both its ranks and its power kinds against the
+  engine's own lists before anything believes it.
 - **The online pseudonym is asked in the lobby**, prefilled from settings —
   otherwise two fresh phones both call themselves "Joueur 1".
 - **Online player count: 2 for now, but designed for N.** So `PlayerView`
@@ -206,6 +219,17 @@ not save you from. The rest predate this session and are still live.
 17. **Cards must size from available height, never fixed width.** A layout
     grown past four cards by penalties has to shrink, not overflow.
     `src/styles/board.css`.
+18. **Whatever the page does not paint, iOS fills from the *root* element.**
+    The felt used to live on `#app`, which is `position: fixed; inset: 0` and so
+    only ever covered the layout viewport. In an installed web app the strip
+    left below it showed the flat `--felt-deep` of `html, body` — darker than
+    the gradient's own bottom edge, with a hard seam. That seam was the dark bar
+    along the bottom of the screen on a real iPhone. The felt is now a root
+    background (propagated to the canvas) that reaches `--felt-deep` *before*
+    the edges, so the canvas fill and the visible edge are the same colour.
+    **`body` must stay `background: transparent`** — it is `height: 100%`, so
+    any background of its own repaints a flat rectangle over the fix.
+    `check:pwa` asserts all three.
 
 ---
 
@@ -238,9 +262,6 @@ not save you from. The rest predate this session and are still live.
   costs nothing, so this is a tidiness question rather than a cost one. Note a
   code is claimed at creation and never released, so codes only accumulate.
 - **Spectators / rejoin after a match ends** — still not specified anywhere.
-- **Whether the lobby should show the rules it is about to use.** The host's
-  settings become the room's rules silently; a guest joining a `school` room is
-  not told. Fine among friends, surprising otherwise.
 
 ---
 

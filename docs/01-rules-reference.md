@@ -35,6 +35,10 @@ partially see.
   their cards. This is what makes memory meaningful.
 - The rest of the deck becomes the **stock**, face down in the centre. Its top
   card is turned face up to start the **discard**.
+
+*Disagreement:* the French schoolyard version deals no face-up card at all — the
+discard starts empty and fills as cards are played, so the first player cannot
+snap or take a discard. → `deck.seedDiscard`.
 - Before the first turn, each player looks at their **two nearest cards** (the two
   closest to them), **once**, then puts them back face down. This peek is
   simultaneous and private.
@@ -86,6 +90,10 @@ Take the top stock card into hand (the **held card**). Then choose one:
 Take the face-up top discard card. You are then **obliged** to swap it into one
 of your slots; the replaced card goes onto the discard. You may not take a
 discard card and then throw it away. **No power triggers.**
+
+*Disagreement:* every source consulted allows this, and it is the least disputed
+rule in the game — but some tables play stock-only, which removes the whole
+information channel of "why did they take that card". → `turn.takeFromDiscard`.
 
 > **The critical asymmetry:** a power only ever fires on a card drawn from the
 > stock and discarded *without being used*. Using a card for its value and using
@@ -230,6 +238,8 @@ exists here, the key must exist there, and vice versa.
 | 26 | Match limit | 100 cumulative | 200; fixed round count | `match.scoreLimit`, `match.roundLimit` |
 | 27 | Reaching the limit | ends the match | eliminates that player only | `match.limitEliminates` |
 | 28 | Stock exhausted | reshuffle discard except top | round ends immediately | `deck.reshuffleDiscard` |
+| 29 | Card turned up at the deal | yes | no, the discard starts empty | `deck.seedDiscard` |
+| 30 | Taking the top of the discard | allowed | stock only | `turn.takeFromDiscard` |
 
 ---
 
@@ -237,7 +247,7 @@ exists here, the key must exist there, and vice versa.
 
 - [Dutch (jeu de cartes) — Wikipédia (fr)](https://fr.wikipedia.org/wiki/Dutch_(jeu_de_cartes)) — the most complete single account: power table (7/8, 9/10, J/Q, black King, Ace-give), red/black King split, *défausse rapide*, announcer penalty, 100-point match limit, and the list of alternative names.
 - [Les VRAIES règles du Cactus — Gamelia](https://gamelia.net/blog/regles-cactus-jeu-de-cartes/) — 2–6 players, 4 cards in a square, King 0 / Ace 1 / figures 10, the 8's power, instant-discard rule with blind penalty card, announcing under 6, "cactus royal".
-- [Règle du jeu — Jeu de cartes "le cactus"](https://jeuducactus.wordpress.com/2014/04/23/regle-du-jeu/) — the French schoolyard version: peek the 2 nearest cards, only the 8 has a power, target "under 5", matching-card discard shrinks the hand, cumulative penalty variant.
+- [Règle du jeu — Jeu de cartes "le cactus"](https://jeuducactus.wordpress.com/2014/04/23/regle-du-jeu/) — the French schoolyard version: peek the 2 nearest cards, only the 8 has a power, target "under 5", matching-card discard shrinks the hand, cumulative penalty variant. **The only source with no face-up card at the deal** — it says taking the discard "n'est pas possible au premier tour puisque la défausse est vide", which is what row 29 records.
 - [Cambio Card Game](https://cambiocardgame.com/) — the commercial cousin: 4 cards in a 2×2 grid, one peek at 2, power ranks shifted (6/7 own, 8/9 opponent, 10/J blind swap, black King look-and-swap), call the word at the end of your turn.
 - [Golf — Pagat](https://www.pagat.com/draw/golf.html) — the wider family this game belongs to, and where the "lowest layout wins, knock to end" structure comes from.
 - [Le jeu de cartes "Cactus" — Webjournal](https://sasdit.wixsite.com/webjournal/post/le-jeu-de-cartes-cactus) — corroborates the schoolyard variant (memory + speed phases, "avoir cactus" under 5).

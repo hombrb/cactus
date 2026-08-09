@@ -112,6 +112,42 @@ await page.locator('[data-act="back"]').click();
 await page.getByRole("button", { name: "Réglages" }).click();
 await page.waitForTimeout(150);
 await shot("settings");
+
+// The powers editor, and the proof that matters: the Règles screen is derived
+// from the config, so choosing a variant has to rewrite it. Hand-written rules
+// text would sail through this.
+await page.locator('[data-act="powers"]').click();
+await page.waitForTimeout(150);
+await shot("powers");
+
+await page.locator('[data-starter="seven-jack"]').click();
+await page.waitForTimeout(100);
+await page.locator('[data-act="back"]').click(); // → Réglages
+await page.waitForTimeout(100);
+await page.locator('[data-act="back"]').click(); // → menu
+await page.getByRole("button", { name: "Règles" }).click();
+await page.waitForTimeout(150);
+await shot("rules-seven-jack");
+
+const listed = await page.evaluate(() => {
+  const sections = [...document.querySelectorAll(".prose section")];
+  const powers = sections.find((s) => s.querySelector("h3")?.textContent === "Pouvoirs");
+  return powers?.textContent ?? "";
+});
+if (!listed.includes("Valet") || listed.includes("Dame") || listed.includes("Roi noir")) {
+  failures.push(`rules text did not follow the chosen powers: ${listed.replace(/\s+/g, " ").trim()}`);
+} else {
+  console.log("rules text follows the chosen powers");
+}
+
+// Back to the preset, or every shot below would be of a different game.
+await page.locator('[data-act="back"]').click();
+await page.getByRole("button", { name: "Réglages" }).click();
+await page.waitForTimeout(150);
+await page.locator('[data-act="powers"]').click();
+await page.waitForTimeout(150);
+await page.locator('[data-act="clear"]').click(); // → Réglages
+await page.waitForTimeout(100);
 await page.locator('[data-act="back"]').click();
 
 await page.getByRole("button", { name: "Jouer sur ce téléphone" }).click();

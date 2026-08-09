@@ -25,6 +25,7 @@ type RuleConfig {
   deck:     DeckConfig
   values:   ValueConfig
   powers:   PowerConfig
+  turn:     TurnConfig
   snap:     SnapConfig
   announce: AnnounceConfig
   scoring:  ScoringConfig
@@ -43,6 +44,7 @@ type RuleConfig {
 | `deck.initialPeekCount` | int | `2` | `0`–`handSize` | `validate(PEEK_INITIAL)` (05) |
 | `deck.initialPeekFree` | bool | `false` | — | `validate(PEEK_INITIAL)` (05) |
 | `deck.reshuffleDiscard` | bool | `true` | — | `refillStockFromDiscard` (05) |
+| `deck.seedDiscard` | bool | `true` | — | `createRound` (05) |
 
 `deckCount` should be raised to `2` above `deck.autoTwoDecksAbove` players; that
 threshold is itself a key:
@@ -59,6 +61,11 @@ slots (indices `0` and `1` by convention). `true` lets the player choose any
 
 `reshuffleDiscard = false` means an exhausted stock ends the round immediately
 instead of recycling the discard — see [11](11-edge-cases-and-invariants.md).
+
+`seedDiscard = false` deals no face-up card: the round opens on an empty
+discard. `discardVersion` **still starts at 1** — it counts changes to the top
+card, not cards. `validate(SNAP)` and `validate(TAKE_DISCARD)` already reject an
+empty discard, so the first player simply has one fewer option.
 
 ### `values`
 
@@ -121,6 +128,16 @@ Default `powers.map`:
 
 Any rank absent from the map has `NONE`. `powerFor` resolves colour-qualified
 keys first, then bare rank, then `NONE`.
+
+### `turn`
+
+| Key | Type | Default | Allowed | Read by |
+|-----|------|---------|---------|---------|
+| `turn.takeFromDiscard` | bool | `true` | — | `validate(TAKE_DISCARD)` (05) |
+
+`false` makes the stock the only source: the discard becomes a destination and a
+snap target, never a draw. Setting it alongside `deck.seedDiscard = false` is
+coherent — the discard is then purely a record of what has been played.
 
 ### `snap`
 
@@ -255,6 +272,47 @@ table2p = standard with {
 
 ---
 
+## Choosing a config
+
+A preset is a starting point, not the unit of choice. What a player picks in
+*Réglages* is a preset **plus a small set of overrides**, and the same answers
+are what a host sends when opening a room:
+
+| Answer | Overrides |
+|---|---|
+| preset | everything below the overrides |
+| powers | `powers.map`, wholesale |
+| snap | `snap.enabled` |
+| seed discard | `deck.seedDiscard` |
+| take from discard | `turn.takeFromDiscard` |
+| score limit | `match.scoreLimit` (ignored by `school`, which counts rounds) |
+
+**A client never sends a `RuleConfig`.** It sends those answers, and the
+authority rebuilds the config from its own presets — `configFrom` for the flat
+table, `configForRoom` for a room; they differ only in `timing`.
+
+`powers.map` is the one answer with structure, and it is allow-listed on both
+axes before it is believed:
+
+```
+POWER_RANK_KEYS   = [A, 2..10, J, Q, K:red, K:black]
+SELECTABLE_POWERS = [NONE, PEEK_OWN, PEEK_OPPONENT, BLIND_SWAP, LOOK_AND_SWAP]
+
+fn parsePowerMap(raw) -> PowerMap | null
+  drop every key not in POWER_RANK_KEYS
+  drop every value not in SELECTABLE_POWERS
+  return null if nothing survives      // "keep the preset's own map"
+```
+
+So the client picks a rank and a power out of a fixed menu: it can choose among
+the game's rules but not invent one. `GIVE_CARD` is absent from
+`SELECTABLE_POWERS` on purpose — it is implemented but untested in a real game,
+and `powers.aceGiveEnabled` still gates it for configs built in code.
+
+Dropping rather than rejecting is deliberate: an old client, a hand-edited
+`localStorage` and a hostile POST body all degrade to fewer powers instead of to
+an error.
+
 ## Validation at load
 
 ```
@@ -268,6 +326,10 @@ fn validateConfig(cfg: RuleConfig) -> Ok | Error[]
   if cfg.deck.useJokers then assert cfg.values.joker is defined
   return Ok
 ```
+
+Called by `createMatch` in DEV, the way `checkInvariants` is called by
+`applyAction` — every match passes through one place, and configs are now
+assembled from user answers rather than only read from `presets`.
 
 Config is **frozen for the duration of a match**. Changing rules mid-match would
 invalidate cumulative scores; the lobby is the only place a config may be chosen.

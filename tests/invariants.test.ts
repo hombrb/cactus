@@ -54,11 +54,22 @@ function playGame(cfg: RuleConfig, seed: string, playerCount: number): GameState
 }
 
 describe("invariant sweep over seeded random games", () => {
+  // The rules a player can now assemble in Réglages are not presets, so the
+  // sweep has to cover an assembled one: a power map nobody shipped, an empty
+  // opening discard, and no taking from it.
+  const custom: RuleConfig = {
+    ...standard,
+    deck: { ...standard.deck, seedDiscard: false },
+    turn: { takeFromDiscard: false },
+    powers: { ...standard.powers, map: { "7": "PEEK_OWN", J: "PEEK_OPPONENT" } },
+  };
+
   const configs: [string, RuleConfig, number][] = [
     ["standard 3p", standard, 3],
     ["standard 4p", standard, 4],
     ["school 2p", school, 2],
     ["table2p", table2p, 2],
+    ["custom 7/J, no seed, stock only 2p", custom, 2],
   ];
 
   for (const [label, cfg, players] of configs) {

@@ -59,6 +59,15 @@ function halfInfo(page, seat) {
 const alice = await phone();
 const bob = await phone();
 
+// --- the host picks rules that are not a preset ---------------------------
+// The room is minted from the host's own settings, so a variant chosen here has
+// to reach the guest's phone — otherwise Bob plays rules he was never told.
+await alice.getByRole("button", { name: "Réglages" }).click();
+await alice.locator('[data-act="powers"]').click();
+await alice.locator('[data-starter="seven-jack"]').click();
+await alice.locator('[data-act="back"]').click(); // → Réglages
+await alice.locator('[data-act="back"]').click(); // → menu
+
 // --- create ---------------------------------------------------------------
 await alice.getByRole("button", { name: "Jouer à plusieurs" }).click();
 await alice.fill('input[name="name"]', "Alice");
@@ -98,6 +107,17 @@ check(names.some((n) => n.includes("Bob")), "the host sees the guest arrive");
 check(
   await alice.getByRole("button", { name: "Démarrer" }).isEnabled(),
   "start unlocks once two players are in",
+);
+
+const aliceRules = await alice.locator(".lobby__rules li").allTextContents();
+const bobRules = await bob.locator(".lobby__rules li").allTextContents();
+check(
+  aliceRules.some((c) => c === "Pouvoirs : 7 · Valet"),
+  "the host's chosen powers are named in the lobby",
+);
+check(
+  JSON.stringify(bobRules) === JSON.stringify(aliceRules),
+  `the guest is told the same rules (${bobRules.join(", ")})`,
 );
 check(
   (await bob.getByRole("button", { name: "Démarrer" }).count()) === 0,

@@ -127,12 +127,15 @@ fn dealRound(state) -> (GameState, Event[])
       deals.push({ playerId: p.id, slot: i, cardId })
     players.push(p with { layout, hasPeeked: false, roundScore: null })
 
-  seedCard = order[cursor]; cursor += 1
+  seedCard = null
+  if cfg.deck.seedDiscard:
+    seedCard = order[cursor]; cursor += 1
   stock = order[cursor ..]
 
   s = s with {
     cards: table(deck), players, stock,
-    discard: [seedCard], discardVersion: 1,
+    discard: seedCard == null ? [] : [seedCard],
+    discardVersion: 1,
     heldCard: null, pendingPower: null, pendingSnapGive: null,
     lockedSlots: {}, announcerId: null, finalLapRemaining: null,
     roundNumber: state.roundNumber + 1,
@@ -143,9 +146,12 @@ fn dealRound(state) -> (GameState, Event[])
 
   return (s, [ RoundStarted { s.roundNumber, s.dealerIndex, cfg.deck.handSize,
                               stockSize: len(stock) },
-               CardsDealt { deals },
-               DiscardSeeded { cardId: seedCard } ])
+               CardsDealt { deals } ]
+             + (seedCard == null ? [] : [ DiscardSeeded { cardId: seedCard } ]))
 ```
+
+`discardVersion` starts at 1 whether or not a card was seeded: it counts changes
+to the top of the discard, not cards ([02](02-rule-config.md#deck)).
 
 Two details that are easy to get wrong:
 
@@ -255,6 +261,7 @@ windows would punish players for the engine's bookkeeping.
 
 ```
 fn validate(state, TakeDiscard { playerId }) -> Verdict
+  if not cfg.turn.takeFromDiscard:   reject "TAKE_DISCARD_DISABLED"
   if state.phase != TURN_START:      reject "WRONG_PHASE"
   if not isCurrent(state, playerId): reject "NOT_YOUR_TURN"
   if len(state.discard) == 0:        reject "DISCARD_EMPTY"
