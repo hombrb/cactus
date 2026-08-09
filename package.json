@@ -1,0 +1,25 @@
+{
+  "name": "cactus",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cactus — jeu de cartes à deux sur un téléphone",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/make-icons.mjs",
+    "shots": "node scripts/shots.mjs",
+    "check:pwa": "node scripts/check-pwa.mjs",
+    "verify": "npm run build && npm test && npm run shots && npm run check:pwa"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7",
+    "vitest": "^3.2.4"
+  }
+}

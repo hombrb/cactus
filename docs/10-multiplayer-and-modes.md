@@ -8,13 +8,13 @@ arbitrated, and what a shared-device game must do that a networked one need not.
 
 ## 1. Two modes, one engine
 
-| | **Room** | **Hotseat** |
+| | **Room** | **Flat table** |
 |---|---|---|
-| Devices | one per player | one, shared |
+| Devices | one per player | one, lying between two players |
 | Identity | join code, no account | none |
 | Authority | server process | the device |
-| Projection driven by | socket identity | an `activeViewer` pointer |
-| Snap | on | off (`hotseat` preset, [07 §8](07-snap.md)) |
+| Projection driven by | socket identity | one `projectFor` per half, both live |
+| Snap | on | on, ordered by `pointerdown` ([07 §8](07-snap.md#8-two-players-on-one-device)) |
 | Turn timeouts | on | off |
 
 The reducer is **identical**. Everything that differs is either a `RuleConfig` key
@@ -124,41 +124,76 @@ on buffer B closes:
 The reducer never sees a timestamp. The **action log**, which records the submitted
 order, remains the complete replay input.
 
-## 6. Single-device hotseat
+## 6. Two players, one phone (flat table)
 
-Two players, one phone, opponent's half rotated 180°. The engine is unchanged; the
-whole problem is **preventing the two humans from seeing each other's private
-information on a screen they share**.
+The phone lies **flat on the table between the two players**, portrait. Each
+player sits at one end; the opponent's half is rotated 180° so both read their own
+end the right way up. Stock and discard sit in the band between them. This is the
+arrangement the `table2p` preset ([02](02-rule-config.md)) and the V1 app assume.
 
-Three mechanisms, all client-side, all mandatory:
+> **This supersedes an earlier "pass the phone" design** in which one
+> `activeViewer` held the device at a time and a full-screen hand-off panel
+> covered every turn change. Both models are viable, but they are not
+> interchangeable: passing the phone forces snap off and makes the initial peek
+> sequential, while the flat table keeps both halves live and both mechanics
+> intact. Everything below assumes the flat table.
 
-1. **`activeViewer` replaces socket identity.** `projectFor(state, activeViewer)`
-   is called with whoever is currently entitled to look. Everything private — the
-   initial peek, a drawn card, a `CardRevealed` — is rendered only for
-   `activeViewer`.
+The engine is unchanged. Both halves are rendered in the same pass from **two
+different `projectFor` calls**, so the top half is structurally incapable of
+drawing what only the bottom player may see.
 
-2. **A hand-off gate between turns.** `TURN_END` is not a 3-second window here; it
-   is a full-screen "pass the phone to Bob — tap when ready" panel. Nothing private
-   is on screen while it is up. This is precisely why `EndTurn` exists as an
-   explicit action ([03 §6](03-domain-model.md#6-actions)): the window closes when
-   a human confirms, not when a timer expires. `cfg.timing.endOfTurnWindowMs` and
-   `turnTimeoutMs` are both `null` in the `hotseat` preset.
+### Privacy is by moment, not by turn
 
-3. **The masked band.** With the opponent's layout drawn upside-down at the top and
-   yours at the bottom, the shared middle strip (stock, discard, held card) is the
-   leak. Mask it while a private reveal is on screen, and never render a
-   `CardRevealed` face in the shared band — put it over the owner's own half.
+Both halves are live the whole time, so there is no hand-off gate to hide behind.
+Instead each *private moment* is hidden individually, and the rule is one gesture:
 
-Consequences worth stating plainly:
+| Gesture | Meaning |
+|---|---|
+| **Tap** | Place the held card here · choose a power target |
+| **Long-press** | Reveal a card you are entitled to see — hidden again on release |
+| **Swipe toward the middle** | Snap ([07 §8](07-snap.md#8-two-players-on-one-device)) |
 
-- **Snap is off** ([07 §8](07-snap.md#8-hotseat)). One pair of hands, one device:
-  there is no race to arbitrate, only an arm-speed contest the engine cannot see.
-- **The initial peek is sequential, not simultaneous.** Each player peeks behind
-  the hand-off gate in turn. The `INITIAL_PEEK` barrier already tolerates this — it
-  waits for `hasPeeked` on everyone and does not care about wall-clock ordering
+Long-press is what makes this work physically: you cup the phone with the same
+hand that is holding the card down, and nothing can be left exposed by accident.
+
+Three placement rules follow, and all three are load-bearing:
+
+1. **A card is drawn in the half of the player entitled to see it.** A
+   `CardRevealed` naming an *opponent's* slot is rendered in the **actor's own
+   tray**, never lit up in the opponent's half — the actor could not shield it
+   there.
+2. **The middle band carries no text.** Anything written between the two players
+   is upside down for one of them. Only the stock back and the discard face.
+3. **Card faces print rank and suit in two opposite corners, the second rotated
+   180°** — exactly like a real playing card. This is what makes the shared
+   discard legible from both ends, and it is the single most important design
+   detail on the screen.
+
+### `projectFor` permits; the client still decides
+
+`knownBy` persists, so a card peeked at the start of the round stays *permitted*
+for the rest of it. On a shared screen, rendering everything the projection allows
+would leave both players' peeked cards face up for anyone to lean over and read.
+
+So a face is drawn only when **both** hold: the projection permits it, **and** an
+explicit single-use **reveal grant** exists. Grants are created by the rules event
+that entitled the player to look (`InitialPeeked`, `CardRevealed`) and are consumed
+the moment they stop looking. You get one look, as at a real table. This is the
+concrete form of the rule in
+[09 §5](09-hidden-information.md#5-what-the-engine-deliberately-does-not-model).
+
+### Consequences
+
+- **Snap stays on.** Both players can reach their own half at all times, so the
+  race is genuine. Ordered by `pointerdown`, not by gesture recognition.
+- **The initial peek is simultaneous.** Each player long-presses their own two
+  nearest cards, at their own end, at the same time. The `INITIAL_PEEK` barrier
+  already tolerates any ordering
   ([05 §4](05-engine-core.md#4-the-initial-peek-barrier)).
-- **Trust is physical.** Nothing stops a player from watching over a shoulder. The
-  mode is for two people who want to play, not for strangers.
+- **`EndTurn` is still explicit**, and `cfg.timing.endOfTurnWindowMs` is `null`:
+  the end-of-turn window closes when a human presses the button, never on a timer.
+- **Trust is physical.** Nothing stops a player from leaning over. The mode is for
+  two people who want to play, not for strangers.
 
 ## 7. What is intentionally left undecided
 

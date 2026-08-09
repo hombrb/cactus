@@ -1,0 +1,247 @@
+.screen--menu {
+  justify-content: center;
+  gap: 34px;
+  max-width: 420px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.brand {
+  text-align: center;
+}
+
+.brand__mark {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  height: 58px;
+  margin-bottom: 16px;
+}
+
+/* Three card backs fanned out — the cheapest possible logo. */
+.brand__mark span {
+  width: 30px;
+  height: 44px;
+  border-radius: 6px;
+  background: var(--card-face);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.brand__mark span:first-child {
+  transform: rotate(-12deg) translateY(3px);
+  background: var(--card-back);
+}
+
+.brand__mark span:last-child {
+  transform: rotate(12deg) translateY(3px);
+  background: var(--card-back);
+}
+
+.brand__title {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.brand__sub {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--on-felt-dim);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--on-felt-faint);
+}
+
+/* --- sheets (rules, settings) ------------------------------------------ */
+
+.screen--sheet {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  gap: 18px;
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  padding-bottom: 8px;
+}
+
+.sheet__head h2 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-felt-dim);
+}
+
+.field__note {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--on-felt-faint);
+}
+
+.field__input {
+  font: inherit;
+  font-size: 16px; /* 16px or iOS zooms the page on focus */
+  color: var(--on-felt);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(247, 245, 239, 0.16);
+  border-radius: 12px;
+  padding: 12px 14px;
+  width: 100%;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice--inline {
+  flex-direction: row;
+}
+
+.choice__opt {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(247, 245, 239, 0.16);
+  background: rgba(0, 0, 0, 0.16);
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.choice--inline .choice__opt {
+  flex: 1;
+  text-align: center;
+  padding: 10px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.choice__opt b {
+  display: block;
+  font-size: 15px;
+}
+
+.choice__opt small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--on-felt-faint);
+}
+
+.choice__opt[data-on="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.toggle {
+  position: relative;
+  width: 52px;
+  height: 31px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(247, 245, 239, 0.16);
+  transition: background var(--base) var(--ease);
+  flex: none;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: var(--on-felt);
+  transition: transform var(--base) var(--ease);
+}
+
+.toggle[data-on="true"] {
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.toggle[data-on="true"]::after {
+  transform: translateX(21px);
+  background: #22180a;
+}
+
+/* --- prose -------------------------------------------------------------- */
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-bottom: 30px;
+}
+
+.prose h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.prose p,
+.prose li {
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(242, 239, 230, 0.82);
+}
+
+.prose p + p {
+  margin-top: 8px;
+}
+
+.prose ul {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prose b {
+  color: var(--on-felt);
+}
+
+.callout {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 3px solid var(--accent);
+}

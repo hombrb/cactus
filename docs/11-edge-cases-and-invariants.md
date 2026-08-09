@@ -79,7 +79,7 @@ too — it is O(deck).
 | `pendingPower != null` **iff** `phase` is a `POWER_*` phase | Prevents an orphaned power surviving into the next turn |
 | `pendingSnapGive != null` **iff** `phase == AWAIT_SNAP_GIVE`, and `resumePhase != null` alongside it | The snap channel must always know where to return |
 | `lockedSlots` is empty outside `POWER_AWAIT_SWAP_CONFIRM` | A stale lock silently disables snapping |
-| `discardVersion` never decreases, and increments exactly when `discard[0]` changes | The whole snap race model rests on this |
+| `discardVersion` increments exactly when `discard[0]` changes, and never decreases **within a round** (each deal restarts it at 1) | The whole snap race model rests on this |
 | `rngCursor` never decreases, and changes only inside `nextRandom` | Determinism and replay |
 | `actionCounter` increments exactly once per accepted action | Timeout tokens |
 | `finalLapRemaining` is `null`, or decreases monotonically to 0 | The round must terminate |
@@ -192,9 +192,10 @@ in `ROUND_END` awaiting `StartNextRound`.
 | Stock | **26** |
 | **Total** | **52** ✓ |
 
-`discardVersion = 13` equals the discard's size — every version bump corresponds to
-exactly one card reaching the top, which is the cheapest way to spot a
-double-increment bug.
+`discardVersion` also ends at 13 here, matching the discard's size. That is a
+coincidence of this trace, not an invariant: it holds only because no turn took a
+card *off* the discard. `TakeDiscard` and the Ace-give both bump the version while
+shrinking the pile, so the two counters diverge in general.
 
 ### What this trace exercises
 

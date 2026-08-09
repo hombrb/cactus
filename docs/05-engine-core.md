@@ -452,7 +452,8 @@ Design rules for auto-actions:
   are strategic commitments. Drawing and discarding is the neutral move.
 - **A stale timeout is dropped, not rejected.** It is the engine's own message, not
   the player's; surfacing it as `ActionRejected` would spam the log.
-- `cfg.timing.turnTimeoutMs == null` disables arming entirely (hotseat).
+- `cfg.timing.turnTimeoutMs == null` disables arming entirely (two players on
+  one device — see [10 §6](10-multiplayer-and-modes.md#6-two-players-one-phone-flat-table)).
 
 ## 9. Round and match boundaries
 

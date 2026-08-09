@@ -1,0 +1,199 @@
+.board {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  /* Two equal halves with a fixed band between them. The whole board must fit
+     without any page scroll. */
+  grid-template-rows: 1fr auto 1fr;
+}
+
+/* --- halves ------------------------------------------------------------ */
+
+.half {
+  min-height: 0;
+  padding: 8px calc(env(safe-area-inset-right) + 12px) 8px calc(env(safe-area-inset-left) + 12px);
+}
+
+/* The outer edges get real breathing room: on a device with no safe-area inset
+   the cards would otherwise sit flush against the glass. */
+.half[data-seat="top"] {
+  padding-top: calc(env(safe-area-inset-top) + 16px);
+}
+
+.half[data-seat="bottom"] {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+}
+
+/* One rule turns the opponent's whole half — including every touch target —
+   the right way up for them. */
+.half[data-seat="top"] .rotor {
+  transform: rotate(180deg);
+}
+
+.rotor {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  /* In the player's own reading direction: plate, tray, then cards nearest
+     their own edge, where a hand can shield them. The cards take whatever is
+     left and size themselves to it — never the other way round, or a tall
+     layout gets cropped by the fixed viewport. */
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 6px;
+}
+
+.half[data-active="true"] .plate__name {
+  color: var(--accent);
+}
+
+/* --- plate ------------------------------------------------------------- */
+
+.plate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--on-felt-dim);
+  letter-spacing: 0.02em;
+}
+
+.plate__name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--on-felt);
+  transition: color var(--base) var(--ease);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plate__stock {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.plate__score {
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.plate__menu {
+  padding: 2px 4px;
+  color: var(--on-felt-faint);
+  letter-spacing: 1px;
+}
+
+/* --- tray -------------------------------------------------------------- */
+
+.tray {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tray__prompt {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--on-felt-dim);
+}
+
+.tray__slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card--tray {
+  width: clamp(38px, 12vw, 52px);
+}
+
+.tray__label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--on-felt-faint);
+}
+
+.tray__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tray__actions .btn {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* --- layout ------------------------------------------------------------ */
+
+/* Cards are sized from the available HEIGHT: the rows split what is left, each
+   card fills its row, and aspect-ratio derives the width. A layout grown past
+   four cards by penalties therefore gets shorter cards instead of overflowing. */
+.layout {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: var(--gap);
+  place-content: center;
+  max-width: 100%;
+}
+
+.layout[data-count="5"],
+.layout[data-count="6"] {
+  grid-template-columns: repeat(3, auto);
+}
+
+.layout[data-count="7"],
+.layout[data-count="8"] {
+  grid-template-columns: repeat(4, auto);
+}
+
+.card--slot {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+
+/* --- middle band -------------------------------------------------------
+   Deliberately free of text: anything written here would be upside down for
+   one of the two players. Only the stock back and the discard face. */
+
+.middle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  padding: 10px 0;
+  border-top: 1px solid var(--felt-line);
+  border-bottom: 1px solid var(--felt-line);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.pile {
+  width: clamp(48px, 15vw, 66px);
+  border-radius: var(--card-radius);
+  transition: transform var(--fast) var(--ease);
+}
+
+.pile[data-live] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.pile:active {
+  transform: scale(0.95);
+}
+
+.card--pile {
+  width: 100%;
+}

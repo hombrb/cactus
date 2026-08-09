@@ -1,13 +1,53 @@
-# cactus
+# Cactus
 
-Game logic specification for **Cactus** — the French card game also known as
-*Dutch*, *Tamalou*, *Cabo*, *Pablo*. A hidden-information, memory-based,
-lowest-score game of the Golf/Cabo family.
+Le jeu de cartes **Cactus** (aussi appelé *Dutch*, *Tamalou*, *Cabo*, *Pablo*),
+jouable **à deux sur un seul téléphone**.
 
-This repository contains a **logic plan, not an application**: the rules as
-researched, a configurable ruleset, and the full engine described in
-language-neutral pseudocode — data model, state machine, reducer, power
-resolution, snap race handling, scoring, hidden-information projection, and
-multiplayer authority.
+Le téléphone se pose à plat entre les deux joueurs, en mode portrait : chacun voit
+sa moitié à l'endroit, la pioche et la défausse sont au milieu. Les moments privés
+— le coup d'œil initial, la carte piochée, une carte révélée par un pouvoir — se
+regardent en **maintenant le doigt dessus**, la main en coupe autour du téléphone.
 
-**Start here: [`docs/README.md`](docs/README.md).**
+Aucun compte, aucun serveur, aucune connexion : l'application est un fichier
+statique qui tourne hors ligne, et s'installe depuis Safari via
+**Partager → Sur l'écran d'accueil**.
+
+## Gestes
+
+| Geste | Effet |
+|---|---|
+| **Toucher** | Poser la carte piochée · choisir la cible d'un pouvoir |
+| **Maintenir** | Regarder une carte à laquelle tu as droit — elle se cache dès que tu relâches |
+| **Glisser vers le centre** | Défausse rapide |
+
+## Développement
+
+```bash
+npm install
+npm run dev        # serveur de développement
+npm run build      # build statique dans dist/
+npm test           # tests du moteur
+npm run verify     # build + tests + captures d'écran + vérifications PWA
+```
+
+`npm run verify` a besoin d'un serveur de prévisualisation :
+`npm run preview` dans un autre terminal.
+
+Le déploiement est un simple envoi de `dist/` sur n'importe quel hébergement
+statique.
+
+## Structure
+
+```
+docs/          la spécification complète des règles et du moteur (anglais)
+src/engine/    le moteur, pur et sans DOM — transcription de docs/03 à docs/09
+src/ui/        le rendu, sans framework : DOM conservé, patché à chaque état
+tests/         rejoue la partie de référence de docs/11 et vérifie les invariants
+```
+
+Le moteur ne connaît ni le DOM, ni le temps, ni le hasard ambiant : `applyAction`
+est une fonction pure, et toute l'aléa passe par une graine. C'est ce qui rend la
+partie rejouable — et ce qui permettra d'ajouter plus tard des salons en ligne
+sans y toucher.
+
+**La spécification commence ici : [`docs/README.md`](docs/README.md).**

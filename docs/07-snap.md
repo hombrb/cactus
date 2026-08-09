@@ -269,15 +269,27 @@ layout, and placing into a slot that a snap has just emptied is legal
   provably finished at 0, so there is nothing left to play for.
 - After `REVEAL`, snapping is rejected by `inRound`.
 
-## 8. Hotseat
+## 8. Two players on one device
 
-Snap is **disabled** in the `hotseat` preset ([02](02-rule-config.md)) rather than
-adapted. Two players sharing one screen cannot race: whoever is holding the phone
-wins every time, and the mechanic stops being a reflex test and becomes a device
-advantage. Turning it into "press your half of the screen" was considered and
-rejected — it requires both halves to be live simultaneously, which is exactly
-what the privacy mask in
-[10 §6](10-multiplayer-and-modes.md#6-single-device-hotseat) forbids.
+Whether snap survives on a shared screen depends entirely on **how the device is
+held**, and the two cases give opposite answers:
 
-Tables that want snap on one device should play with `snap.enabled = true` and
-accept that it is a house rule about arm speed, not a rule the engine can arbitrate.
+- **Passed from hand to hand.** Snap must be off. Only the holder can reach the
+  screen, so they win every race by construction; the mechanic stops being a
+  reflex test and becomes a device advantage.
+- **Flat on the table between two players.** Snap works, and is the arrangement
+  the `table2p` preset assumes. Both players can reach their own half at all
+  times, so the race is genuine — it is decided by arms, exactly as at a real
+  table.
+
+In the flat-table case the authority is the browser: competing snaps are ordered
+by **`pointerdown` timestamp**, not by when the gesture is recognised, so the
+recogniser's own latency never decides the winner. Everything else — the window
+identified by `discardVersion`, success and failure handling, the penalty card —
+is unchanged from the sections above, because the reducer never knew about
+timestamps in the first place.
+
+The gesture must not be a tap. A tap already means "place a card here" or "choose
+this power target", and a mis-tap that costs a penalty card is a bad trade. A
+**swipe toward the middle** is unambiguous, fast enough for a reflex race, and
+mirrors the physical act of slamming a card onto the pile.

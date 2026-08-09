@@ -146,7 +146,7 @@ because implementers reliably ask.
 
 `requiresThreshold` is **not** enforceable against the announcer's real hand — a
 player announces on belief, and the engine cannot read belief. When set, it is
-enforced only in modes where the engine knows the hand (hotseat replay, tests) and
+enforced only in modes where the engine knows the hand (offline replay, tests) and
 is otherwise advisory. Documented as a rule variant, implemented as a no-op in
 networked play. See [11](11-edge-cases-and-invariants.md).
 
@@ -174,7 +174,7 @@ ends — asserted at config load.
 
 ### `timing`
 
-Not rules. Tuning for real-time play; irrelevant in hotseat.
+Not rules. Tuning for networked play; all null on a single shared device.
 
 | Key | Type | Default | Read by |
 |-----|------|---------|---------|
@@ -184,7 +184,8 @@ Not rules. Tuning for real-time play; irrelevant in hotseat.
 | `timing.peekRevealMs` | int | `4000` | client only (09) |
 | `timing.initialPeekMs` | int | `10000` | `INITIAL_PEEK` barrier (05) |
 
-`turnTimeoutMs = null` disables timeouts (correct for hotseat; dangerous online).
+`turnTimeoutMs = null` disables timeouts (correct on one shared device, where
+there is nobody to time out against; dangerous online).
 
 ---
 
@@ -231,20 +232,26 @@ hardcore = standard with {
 }
 ```
 
-### `hotseat`
+### `table2p`
 
-Not a rules variant — a **mode** preset. Two players on one device cannot race to
-snap, and there is no reason to time turns.
+Not a rules variant — a **mode** preset. Two players around one phone lying flat
+on the table between them. There is nobody to time out against, so every timer is
+disabled and the end-of-turn window is closed by a human instead.
 
 ```
-hotseat = standard with {
-  snap:   { enabled: false },
-  timing: { turnTimeoutMs: null, initialPeekMs: null },
+table2p = standard with {
+  timing: { turnTimeoutMs: null, endOfTurnWindowMs: null, initialPeekMs: null },
 }
 ```
 
-See [10-multiplayer-and-modes.md](10-multiplayer-and-modes.md) for why snap is
-disabled rather than adapted.
+> **This replaces the earlier `hotseat` preset, which set `snap.enabled: false`.**
+> That reasoning — a shared screen makes the snap race unfair — holds when the
+> phone is *passed from hand to hand*, because only the holder can reach it. It
+> does not hold when the phone sits flat between two players who can both reach
+> it, which is the arrangement this app actually uses. Snap is therefore on by
+> default here, arbitrated by which `pointerdown` landed first. See
+> [10 §6](10-multiplayer-and-modes.md#6-two-players-one-phone-flat-table) and
+> [07 §8](07-snap.md#8-two-players-on-one-device).
 
 ---
 

@@ -229,7 +229,8 @@ type Action =
 (`cfg.announce.timing = END_OF_TURN`). After your move resolves, the state sits in
 `TURN_END` for a short window in which you may announce; `EndTurn` closes that
 window explicitly, and `Timeout` closes it after `cfg.timing.endOfTurnWindowMs` if
-you do nothing. In hotseat the "pass the phone" screen *is* that window.
+you do nothing. On a single shared device the window has no timer at all: it
+closes when a human presses the button.
 
 `Timeout.phaseToken` is the `actionCounter` value the timer was armed against. A
 timeout whose token no longer matches is stale (the player acted in time) and is

@@ -34,7 +34,7 @@ language without making a single rules decision themselves.
 | 07 | [07-snap.md](07-snap.md) | *Défausse rapide*, race resolution, slot locking |
 | 08 | [08-scoring.md](08-scoring.md) | Round scoring, announcer penalty, match scoring |
 | 09 | [09-hidden-information.md](09-hidden-information.md) | Authoritative state vs. per-player views |
-| 10 | [10-multiplayer-and-modes.md](10-multiplayer-and-modes.md) | Rooms, authority, transport, single-device hotseat |
+| 10 | [10-multiplayer-and-modes.md](10-multiplayer-and-modes.md) | Rooms, authority, transport, two players on one phone |
 | 11 | [11-edge-cases-and-invariants.md](11-edge-cases-and-invariants.md) | Edge-case table, invariants, worked trace |
 
 If you only read three: **02** (what the rules actually are), **05** (the
@@ -94,3 +94,19 @@ emit EventName { ... }                          // appended to the event log
 This spec targets the `standard` preset defined in
 [02-rule-config.md](02-rule-config.md). Everything a table might play differently
 is a config key, so house rules never require touching the engine.
+
+### Relationship to the code
+
+`src/engine/` is a direct transcription of files 03–09: the function names in the
+pseudocode are the function names in the code, so these documents stay usable as
+the reference while reading it. `tests/trace.test.ts` replays the worked trace of
+[11 §3](11-edge-cases-and-invariants.md#3-worked-trace) and asserts the documented
+result, and `tests/invariants.test.ts` checks
+[11 §2](11-edge-cases-and-invariants.md#2-invariants) after every reduction across
+seeded random games — so "the implementation matches the spec" is a claim you can
+run, not one you have to trust.
+
+Where building the app forced a decision the spec had got wrong, the spec was
+corrected rather than quietly diverged from. The `hotseat` preset became
+[`table2p`](02-rule-config.md#table2p) and [10 §6](10-multiplayer-and-modes.md#6-two-players-one-phone-flat-table)
+was rewritten for a phone lying flat between two players.
