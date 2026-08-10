@@ -182,6 +182,11 @@ fn validate(state, PeekInitial { playerId, slots }) -> Verdict
 fn nearestSlots(cfg) -> SlotIndex[]
   // convention: the two nearest cards are the lowest indices
   return [0 .. cfg.deck.initialPeekCount - 1]
+  // "Nearest" is a name, not a layout: nothing here knows which way up a client
+  // draws the grid, and index 0 may well be the row furthest from its owner. A UI
+  // must therefore *point at* the slots this returns rather than describe them —
+  // naming a row in a prompt sends the player to hold the two cards the peek does
+  // not cover, and the one look of the round shows nothing.
 
 fn onPeekInitial(state, action) -> (GameState, Event[])
   reveals = [ { slot: i, cardId: layoutOf(state, action.playerId)[i].cardId }

@@ -19,9 +19,15 @@ statique qui tourne hors ligne, et s'installe depuis Safari via
 | Geste | Effet |
 |---|---|
 | **Toucher** | Poser la carte piochée · choisir la cible d'un pouvoir |
-| **Maintenir** | Regarder une carte à laquelle tu as droit — elle se cache dès que tu relâches |
+| **Maintenir** | Regarder une carte à laquelle tu as droit — elle se cache dès que tu relâches. Sur une carte que le pouvoir te demande de désigner, la maintenir la choisit aussi |
 | **Glisser vers le centre** | Défausse rapide — la carte suit le doigt |
+| **Glisser la carte piochée** | Sur la défausse pour la jeter, sur une de tes cartes pour la poser là. Toucher la pile de défausse revient au même |
 | **Toucher la carte piochée** | La recacher : elle arrive face visible, et un adversaire curieux se penche |
+
+Au début de la manche, les deux cartes que tu as le droit de regarder sont
+**entourées** : maintiens-les. En ligne, la carte que tu viens de piocher se pose à
+**droite de ta rangée**, qui se décale pour lui faire place ; sur un téléphone
+partagé elle reste dans la rangée tout au bord, celle qu'une main peut couvrir.
 
 Le tour passe tout seul une fois que tu as joué — pas de bouton « Terminer ». Tu
 peux dire **Cactus** après avoir joué, et encore pendant que l'autre joue, tant

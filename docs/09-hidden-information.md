@@ -224,6 +224,15 @@ either. Concretely:
 This is the one rule the server cannot enforce. State it in the client code, and
 prefer a first-party client for competitive play.
 
+The one boundary case, because it is a *pending question* rather than a memory: a
+look may last until the power that granted it has been answered. The black King
+shows one card, then the other, then asks whether to swap them
+([06 §6](06-powers.md)); consuming both looks before the question arrives leaves the
+player answering from memory about cards they are still entitled to see. Holding
+the grant open until they answer is not persistence — nothing is cached, the card
+still hides the moment they let go, and `knownBy` is cleared by the swap itself, so
+the projection ends it whatever the client would prefer.
+
 **Belief.** The engine cannot know whether a player *thinks* they are under the
 threshold, which is why `cfg.announce.requiresThreshold` is advisory in networked
 play ([05 §6](05-engine-core.md#6-announcing)). Enforcing it server-side would

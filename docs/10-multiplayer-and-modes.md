@@ -198,12 +198,27 @@ Instead each *private moment* is hidden individually, and the rule is one gestur
 | Gesture | Meaning |
 |---|---|
 | **Tap** | Place the held card here · choose a power target |
-| **Long-press** | Reveal a card you are entitled to see — hidden again on release |
+| **Long-press** | Reveal a card you are entitled to see — hidden again on release. On a card the pending power is asking about, it *also* chooses it |
 | **Swipe toward the middle** | Snap ([07 §8](07-snap.md#8-two-players-on-one-device)); the card follows the finger |
+| **Drag the card you just drew** | Onto the discard to throw it away, onto one of your own cards to put it there. Tapping the discard pile means the same as the first |
 | **Tap the card you just drew** | Hide it again — it arrives face up (see rule 1 below) |
 
 Long-press is what makes this work physically: you cup the phone with the same
 hand that is holding the card down, and nothing can be left exposed by accident.
+
+Two properties of that table are load-bearing, and both were learned the hard way:
+
+- **A gesture that recognises itself must be able to decline.** The three overlap
+  on the same pixels, so whichever fires first has to be able to hand the input
+  back. A hold on a card with nothing to reveal, and a lift on a card that cannot
+  be snapped, both decline — otherwise they swallow the tap that was aiming a
+  power, and the power looks broken rather than the gesture.
+- **Holding the card you are aiming at is the same act as choosing it.** A player
+  told "regarde une de tes cartes" reaches for the card and presses it; asking
+  them to tap instead, and then press again to see the result, is two gestures for
+  one intention. So the hold chooses *and* reveals — which also means the reveal
+  has to survive the round trip that earns it, because online the entitling event
+  arrives long after the finger did.
 
 Four placement rules follow, and all four are load-bearing:
 
@@ -217,6 +232,16 @@ Four placement rules follow, and all four are load-bearing:
    - **A card revealed elsewhere.** A `CardRevealed` naming an *opponent's* slot
      is rendered in the **actor's own row**, never lit up in the opponent's half,
      where the actor could not shield it.
+
+   **This rule is about a phone lying between two people, and only the drawn card
+   is released from it in a room.** With one seat per device there is nobody to lean
+   over, so the card just drawn sits *beside its owner's own hand* — the row slides
+   left to make space — where the cards it can replace are, and where the drag that
+   discards it starts. The other player's device shows the *back* of it in the same
+   place: `heldBy` is public and the face is `HIDDEN` to everyone else, so this is
+   exactly what the projection permits, and without it a whole turn happened off
+   screen. A card revealed *elsewhere* never leaves the edge row in either mode:
+   that is the one the owner may have to shield.
 2. **The middle band carries no text.** Anything written between the two players
    is upside down for one of them. Only the stock back and the discard face.
 3. **Card faces print rank and suit in two opposite corners, the second rotated
@@ -232,6 +257,16 @@ Four placement rules follow, and all four are load-bearing:
    so the section below applies to a card in the air exactly as it does to one on
    the felt.
 
+   One movement is two cards, and it needs saying differently. A swap
+   (`CardsSwapped`) sends both legs at once along the same line, which reads as one
+   card flickering rather than as two changing places — so the two legs **bow to
+   opposite sides** and take longer over it, and **both slots stay ringed** for a
+   couple of seconds after they land. The ring is the half that matters: a swap is
+   public in position and private in content ([06 §5](06-powers.md)), so the player
+   it happened *to* is entitled to know which of their cards changed, and two backs
+   crossing in a quarter of a second never told them. It is **information, not
+   motion** — reduced motion drops the fade, not the ring.
+
 ### `projectFor` permits; the client still decides
 
 `knownBy` persists, so a card peeked at the start of the round stays *permitted*
@@ -244,6 +279,20 @@ that entitled the player to look (`InitialPeeked`, `CardRevealed`) and are consu
 the moment they stop looking. You get one look, as at a real table. This is the
 concrete form of the rule in
 [09 §5](09-hidden-information.md#5-what-the-engine-deliberately-does-not-model).
+
+**One look, except while a decision is still pending on what it showed.** The black
+King reveals one card, then the other, then asks whether to swap them
+([06 §6](06-powers.md)) — and with the looks single-use and serial, both faces were
+gone by the time the question arrived, leaving the player to answer from memory. A
+grant survives the release for as long as the power is waiting for its answer. It
+still hides on release, so a shared screen is no more exposed; and `knownBy` is
+untouched, so the projection closes the door by itself the moment the swap resolves.
+
+**The grant is created by the event, so online it arrives after the gesture.** A
+client dispatches and is told later; a player who holds a card down to see it is
+holding it before the entitlement exists. The grant therefore has to be able to
+begin a look on a finger that is already there, or the first press of every round
+reveals nothing and the player learns to press twice.
 
 The **held card is not a grant** and never was: `projectFor` ships it to its holder
 alone, and it ceases to exist the moment they put it down. Showing it face up costs

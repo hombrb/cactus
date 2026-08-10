@@ -42,30 +42,85 @@
   min-height: 0;
   display: grid;
   /* In the player's own reading direction: plate, then the cards, then the tray
-     hard against their own edge. The tray is the private row — the card just
-     drawn, face up — so it belongs at the edge furthest from the opponent,
-     where a hand can shield it; it also puts "Défausser" under the thumb. The
-     cards take whatever is left and size themselves to it — never the other way
+     hard against their own edge. The tray is the private row — a card revealed
+     elsewhere, and on the flat table the card just drawn too — so it belongs at
+     the edge furthest from the opponent, where a hand can shield it. The cards
+     take whatever is left and size themselves to it — never the other way
      round, or a tall layout gets cropped by the fixed viewport. */
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 6px;
+  /* A second column, zero wide until this player is holding a card. Opening it
+     is what slides the hand left to make room, and the card lands in it.
+
+     A plain length, never `auto`: an `auto` track next to a card whose width
+     comes from its height is the circular dependency WebKit resolves as zero
+     (trap 11). And `.layout` stays the only thing in its own column, so it is
+     still an honest `container-type: size` box and its `100cqw` still measures
+     the space the grid actually has. */
+  grid-template-columns: minmax(0, 1fr) var(--held-col, 0px);
+  row-gap: 6px;
+  column-gap: var(--held-gap, 0px);
 }
 
-/* Explicit rows, because auto-placement makes hiding a child dangerous: with
-   the tray display:none online, .layout slid up into the `auto` row and its
-   height became indefinite, collapsing every card to 2px — the same failure iOS
-   showed, from a different cause. Pinned, a hidden child leaves a gap instead
-   of moving its siblings. */
+/* Explicit rows AND columns, because auto-placement makes hiding a child
+   dangerous: with the tray display:none online, .layout slid up into the `auto`
+   row and its height became indefinite, collapsing every card to 2px — the same
+   failure iOS showed, from a different cause. Pinned, a hidden child — or a
+   zero-width track — leaves a gap instead of moving its siblings. */
 .rotor > .plate {
   grid-row: 1;
+  grid-column: 1 / -1;
 }
 
 .rotor > .layout {
   grid-row: 2;
+  grid-column: 1;
 }
 
 .rotor > .tray {
   grid-row: 3;
+  grid-column: 1 / -1;
+}
+
+/* Stretched, not centred, so the card inside gets a definite width to be 100% of.
+   `place-items: center` sizes the wrapper to its content instead, and the content
+   is a card whose width is a percentage of the wrapper — the same circular
+   dependency as trap 11, and Chromium resolved it to a card that painted nowhere
+   near the box it reported. */
+.rotor > .held {
+  grid-row: 2;
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* Beside the hand the label goes under the card, not next to it: the column is
+   one card wide by construction. */
+.held .tray__slot {
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+/* Only online, and only while there is something to put there. On the shared
+   phone the tray keeps the drawn card: the two players are looking at the same
+   screen, and the edge row is the one a hand can cover. */
+.board[data-mode="remote"] .half[data-holding="1"] .rotor {
+  --held-col: clamp(48px, 16vw, 68px);
+  --held-gap: 10px;
+}
+
+.held .card--tray {
+  width: 100%;
+}
+
+/* Where the card being dragged would land if the finger let go now. */
+.card[data-drop="1"],
+.pile[data-drop="1"] {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
 }
 
 .half[data-active="true"] .plate__name {

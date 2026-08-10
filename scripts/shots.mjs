@@ -124,6 +124,19 @@ async function clickIfOffered(name) {
 }
 
 /**
+ * Throw the held card away by tapping the discard pile.
+ *
+ * There is no "Défausser" button any more: the card is dragged onto the pile, and
+ * tapping the pile is the same instruction for a thumb that would rather not
+ * slide. Only ever called with a card in hand, because the same pile is a draw
+ * source at `TURN_START`.
+ */
+async function throwHeldAway() {
+  await page.locator(".pile--discard").click();
+  await page.waitForTimeout(80);
+}
+
+/**
  * Draw, throw it away, resolve whatever that fires, and let the turn pass.
  *
  * Buttons only, so it works from either half: the piles are shared and the board
@@ -134,7 +147,7 @@ async function playATurn() {
   if ((await stock.count()) === 0) return false;
   await stock.click();
   await page.waitForTimeout(80);
-  await clickIfOffered("Défausser");
+  await throwHeldAway();
   await clickIfOffered("Passer");
   await clickIfOffered("Laisser");
   await settleTurn();
@@ -224,7 +237,8 @@ await shot("held-hidden");
 await half("bottom").locator(".card--tray").click();
 await page.waitForTimeout(150);
 
-await page.getByRole("button", { name: "Défausser" }).click();
+// Tapping the discard pile is what throws the held card away now.
+await throwHeldAway();
 await page.waitForTimeout(150);
 await shot("power-targeting");
 
@@ -306,11 +320,7 @@ for (let i = 0; i < 40; i++) {
   if ((await stock.count()) > 0) {
     await stock.click();
     await page.waitForTimeout(60);
-    const discard = page.getByRole("button", { name: "Défausser" });
-    if ((await discard.count()) > 0) {
-      await discard.first().click();
-      await page.waitForTimeout(60);
-    }
+    await throwHeldAway();
   }
   const skip = page.getByRole("button", { name: "Passer" });
   if ((await skip.count()) > 0) {

@@ -42,9 +42,22 @@ interface HalfRefs {
   readonly stock: HTMLElement;
   readonly prompt: HTMLElement;
   readonly trayCard: HTMLElement;
+  /** The card and its label, moved between the tray and `held` as one. */
+  readonly traySlot: HTMLElement;
+  /** Where `traySlot` lives when it is not beside the hand. */
+  readonly trayHome: HTMLElement;
   readonly trayLabel: HTMLElement;
   readonly actions: HTMLElement;
   readonly layout: HTMLElement;
+  /**
+   * The column beside the hand where the card being held sits, online.
+   *
+   * Empty on the flat table: there the drawn card belongs in the tray at its
+   * owner's own edge, which is the row a cupped hand covers (docs/10 §6 rule 1).
+   * In a room nobody is leaning over, so it sits next to the cards it can
+   * replace — and the row slides left to make space for it.
+   */
+  readonly held: HTMLElement;
   slots: HTMLElement[];
   /**
    * One detacher per slot node, in slot order.
@@ -99,8 +112,28 @@ const DRAG_ADOPTION_MS = 1500;
  */
 const SLOT_TAP_SLOP = 18;
 
+/**
+ * How far outside the discard pile a release still counts as landing on it.
+ *
+ * The pile is the smallest target on the board and it sits at the end of the
+ * gesture's natural direction of travel, so it is worth being generous about. The
+ * slots get none of this: they are neighbours, and slop would make two of them
+ * claim the same pixel.
+ */
+const DROP_SLOP = 28;
+
 const slotKey = (ref: { playerId: PlayerId; slot: number }): string =>
   `${ref.playerId}|${ref.slot}`;
+
+const within = (
+  rect: Rect,
+  at: { clientX: number; clientY: number },
+  slop: number,
+): boolean =>
+  at.clientX >= rect.x - slop &&
+  at.clientX <= rect.x + rect.w + slop &&
+  at.clientY >= rect.y - slop &&
+  at.clientY <= rect.y + rect.h + slop;
 
 /** A planned movement, with the source measured before the board was repainted. */
 interface Departure {
@@ -125,6 +158,17 @@ export class Board {
   private readonly flights: FlightLayer;
   /** Whether the far half is drawn upside down — see `spin`. */
   private readonly rotated: boolean;
+  /**
+   * Whether the card being held sits beside its owner's hand rather than in the
+   * private row at their own edge.
+   *
+   * True online and false on the shared phone, and the two are not a style
+   * choice: the edge row exists so a hand can cover it (docs/10 §6 rule 1), and
+   * that only matters when somebody is sitting opposite you.
+   */
+  private readonly heldBeside: boolean;
+  /** The pile or slot a released drag would land on, while one is live. */
+  private dropEl: HTMLElement | null = null;
   /** The card the finger is holding, if any, and where it came from. */
   private drag: DragHandle | null = null;
   private dragFrom: Anchor | null = null;
@@ -177,6 +221,7 @@ export class Board {
     // nobody is opposite anybody, and the same rotation would just be wrong.
     const mode = client.seats.length === 1 ? "remote" : "table";
     this.rotated = mode === "table";
+    this.heldBeside = mode === "remote";
 
     root.innerHTML = `
       <div class="board" data-mode="${mode}">
@@ -211,11 +256,21 @@ export class Board {
       if (actor !== null) this.dispatch({ type: "DrawStock", playerId: actor });
     });
     this.middle.querySelector(".pile--discard")!.addEventListener("click", () => {
-      // The pile is only ever a draw source; when the rule is off it is scenery,
-      // and dispatching would just earn an ActionRejected.
-      if (!this.primaryView().config.turn.takeFromDiscard) return;
       const actor = this.actor();
-      if (actor !== null) this.dispatch({ type: "TakeDiscard", playerId: actor });
+      if (actor === null) return;
+      const view = this.primaryView();
+      // Holding a card, the pile is where you throw it away: the tap that says
+      // what dragging the card onto it says, for a thumb that would rather not
+      // slide. It is also the only focusable way to do it — the card is a div,
+      // the pile is a button.
+      if (view.phase === "AWAIT_HELD_DECISION" && view.heldBy === actor) {
+        this.dispatch({ type: "DiscardHeld", playerId: actor });
+        return;
+      }
+      // Otherwise it is only ever a draw source; when the rule is off it is
+      // scenery, and dispatching would just earn an ActionRejected.
+      if (!view.config.turn.takeFromDiscard) return;
+      this.dispatch({ type: "TakeDiscard", playerId: actor });
     });
 
     this.unsubscribe = client.subscribe((updates) => {
@@ -306,6 +361,7 @@ export class Board {
           <div class="tray__actions"></div>
         </div>
         <div class="layout"><div class="layout__grid"></div></div>
+        <div class="held"></div>
       </div>
     `;
 
@@ -324,11 +380,14 @@ export class Board {
       stock: root.querySelector<HTMLElement>(".plate__stock")!,
       prompt: root.querySelector<HTMLElement>(".tray__prompt")!,
       trayCard,
+      traySlot: root.querySelector<HTMLElement>(".tray__slot")!,
+      trayHome: root.querySelector<HTMLElement>(".tray")!,
       trayLabel: root.querySelector<HTMLElement>(".tray__label")!,
       actions: root.querySelector<HTMLElement>(".tray__actions")!,
       // The grid, not its container: .layout is the size container the track
       // widths are measured against, so it must stay free of the cards.
       layout: root.querySelector<HTMLElement>(".layout__grid")!,
+      held: root.querySelector<HTMLElement>(".held")!,
       slots: [],
       detach: [],
       pressing: null,
@@ -377,9 +436,119 @@ export class Board {
             this.patch();
           }
         },
+        // No `onSwipeInward`: a snap fires at a fixed threshold because the race
+        // is timestamped and the finger must not be allowed to decide it
+        // (docs/07 §8). Throwing your own card away races nobody, so this can
+        // afford a real drop target — which is far harder to fire by accident.
+        onDragStart: () => this.onHeldDragStart(half),
+        onDragMove: (at) => {
+          this.drag?.moveTo(at.clientX, at.clientY);
+          this.markDrop(half, at);
+        },
+        onDragEnd: (release) => this.onHeldDragEnd(half, release),
       },
       { inward, tapSlopPx: SLOT_TAP_SLOP },
     );
+  }
+
+  /**
+   * Lift the card this player is holding.
+   *
+   * Declined unless there is really a card here and it is still theirs to place,
+   * so a small slide on anything else still ends as the tap that hides it.
+   */
+  private onHeldDragStart(half: HalfRefs): boolean {
+    // Not gated on `flights.enabled`, unlike the snap lift below it. There the
+    // drag is decoration on a gesture that fires by itself at a threshold; here it
+    // *is* the gesture, and reduced motion must not take the only way to throw a
+    // card away. `FlightLayer.lift` follows the finger by writing a transform, not
+    // by animating, so it works with every duration zeroed — the card simply
+    // arrives instead of travelling.
+    const view = this.viewFor(half);
+    if (view.heldBy !== half.playerId) return false;
+    if (view.phase !== "AWAIT_HELD_DECISION" && view.phase !== "AWAIT_SLOT_FOR_DISCARD") {
+      return false;
+    }
+
+    const anchor: Anchor = { kind: "tray", playerId: half.playerId };
+    this.dragFrom = anchor;
+    this.dragHeld = true;
+    this.drag = this.flights.lift(
+      rectOf(half.trayCard),
+      this.lookOf(half.trayCard, HIDDEN),
+      this.spin(anchor),
+      half.trayCard,
+    );
+    return true;
+  }
+
+  /**
+   * Dropped. On the discard it is thrown away, on one of your own cards it takes
+   * that card's place, and anywhere else it goes back where it came from.
+   *
+   * Both landings already have a flight — `HeldDiscarded` flies tray → discard and
+   * `CardPlaced` flies tray → slot — so `takeOff` adopts the clone under the
+   * finger rather than making a second one.
+   */
+  private onHeldDragEnd(
+    half: HalfRefs,
+    release: { clientX: number; clientY: number } | null,
+  ): void {
+    this.clearDrop();
+    const target = release === null ? null : this.dropTargetAt(half, release);
+    if (target === "discard") {
+      this.dispatchForDrag({ type: "DiscardHeld", playerId: half.playerId });
+    } else if (target !== null) {
+      this.dispatchForDrag({ type: "PlaceInSlot", playerId: half.playerId, slot: target });
+    }
+    this.onDragRelease();
+  }
+
+  /** What a release at this point would mean, if anything. */
+  private dropTargetAt(
+    half: HalfRefs,
+    at: { clientX: number; clientY: number },
+  ): "discard" | number | null {
+    const view = this.viewFor(half);
+    // Generous, because the pile is small and it is the whole middle of the
+    // gesture's direction of travel. A card taken from the discard has to be
+    // placed, never thrown back (docs/05), hence the phase check.
+    if (
+      view.phase === "AWAIT_HELD_DECISION" &&
+      within(rectOf(this.discardCard), at, DROP_SLOP)
+    ) {
+      return "discard";
+    }
+    // Exact, because the slots are neighbours: any slop here would make two of
+    // them claim the same pixel.
+    for (let slot = 0; slot < half.slots.length; slot++) {
+      const el = half.slots[slot]!;
+      if (targetableBy(view, this.client.seats, { playerId: half.playerId, slot }) === null) {
+        continue;
+      }
+      if (within(rectOf(el), at, 0)) return slot;
+    }
+    return null;
+  }
+
+  /** Show where the card would land, so a drag is never a guess. */
+  private markDrop(half: HalfRefs, at: { clientX: number; clientY: number }): void {
+    const target = this.dropTargetAt(half, at);
+    const el =
+      target === "discard"
+        ? this.middle.querySelector<HTMLElement>(".pile--discard")
+        : target === null
+          ? null
+          : (half.slots[target] ?? null);
+    if (el === this.dropEl) return;
+    this.clearDrop();
+    if (el) el.dataset.drop = "1";
+    this.dropEl = el;
+  }
+
+  private clearDrop(): void {
+    if (this.dropEl) delete this.dropEl.dataset.drop;
+    this.dropEl = null;
   }
 
   /**
@@ -647,13 +816,18 @@ export class Board {
 
     // Only ever lit for a seat this device owns: online, the opponent's turn is
     // not an invitation to draw.
-    const actionable = view.phase === "TURN_START" && this.actor() !== null;
+    const actor = this.actor();
+    const actionable = view.phase === "TURN_START" && actor !== null;
+    // Lit while this device is holding a card too, because that is when the pile
+    // is a *destination*: the place to drag it, and the place to tap instead.
+    const throwable = view.phase === "AWAIT_HELD_DECISION" && view.heldBy === actor;
     this.middle.querySelector(".pile--stock")!.toggleAttribute("data-live", actionable);
     this.middle
       .querySelector(".pile--discard")!
       .toggleAttribute(
         "data-live",
-        actionable && view.discard.length > 0 && view.config.turn.takeFromDiscard,
+        throwable ||
+          (actionable && view.discard.length > 0 && view.config.turn.takeFromDiscard),
       );
   }
 
@@ -910,6 +1084,7 @@ export class Board {
   }
 
   private forgetDrag(): void {
+    this.clearDrop();
     if (this.dragTimer !== null) clearTimeout(this.dragTimer);
     this.dragTimer = null;
     this.dragPending = false;
@@ -997,8 +1172,17 @@ export class Board {
     if (!half.live) {
       half.prompt.textContent = "";
       half.trayLabel.textContent = "";
-      half.trayCard.hidden = true;
       half.actions.innerHTML = "";
+      // One exception, and it is not a private card: `heldBy` is public and
+      // `heldCard` is HIDDEN to everyone else, so the *back* of the card in the
+      // opponent's hand is exactly what the projection permits. Without it a whole
+      // turn happened off screen online — the tray anchor resolved to a
+      // `display: none` node, so even the flight out of the stock was skipped, and
+      // all you saw was the stock count tick down.
+      const showsBack = this.heldBeside && view.heldBy === half.playerId;
+      half.trayCard.hidden = !showsBack;
+      if (showsBack) paintCard(half.trayCard, "back");
+      this.placeHeldCard(half, showsBack);
       return;
     }
 
@@ -1096,8 +1280,33 @@ export class Board {
     if (trayFace !== "empty") {
       paintCard(half.trayCard, trayFace, trayCardId ? view.cards[trayCardId] : undefined);
     }
+    // The card you just drew goes beside your hand online, where the cards it can
+    // replace are and where the drag that discards it starts. A card revealed
+    // *elsewhere* never moves out of the edge row, in either mode: that one the
+    // owner may have to shield (docs/10 §6 rule 1).
+    this.placeHeldCard(half, this.heldBeside && view.heldBy === half.playerId);
 
     this.renderButtons(half.actions, half.live ? buttons : []);
+  }
+
+  /**
+   * Put the private card in the column beside the hand, or back at the owner's
+   * edge.
+   *
+   * One node moves rather than two existing, so `anchorEl` stays a single lookup,
+   * the `"tray"` anchor keeps meaning "wherever this half shows its held card",
+   * and `planFlights` never has to know which mode it is in. Moving a node
+   * mid-flight is safe: the flight layer keys on the element, so it un-hides
+   * whatever the card's new home is.
+   */
+  private placeHeldCard(half: HalfRefs, beside: boolean): void {
+    // Read by board.css to open the column, which is what slides the hand left.
+    half.root.dataset.holding = beside ? "1" : "0";
+    const target = beside ? half.held : half.trayHome;
+    if (half.traySlot.parentElement === target) return;
+    if (beside) target.append(half.traySlot);
+    // Between the prompt and the buttons, where the markup put it.
+    else target.insertBefore(half.traySlot, half.actions);
   }
 
   private currentPlayerTray(
@@ -1123,20 +1332,21 @@ export class Board {
         };
 
       case "AWAIT_HELD_DECISION": {
-        // Face up by default. The tray sits at this player's own edge (board.css
-        // pins it to the outermost row), so the card they just drew is theirs to
-        // read without a gesture; a tap hides it again.
+        // Face up by default: the card sits either at this player's own edge or
+        // beside their own hand, so what they just drew is theirs to read without
+        // a gesture. A tap hides it again.
+        //
+        // No "Défausser" button any more. Throwing the card away is dragging it
+        // onto the discard — or tapping the pile, which `patchMiddle` lights while
+        // the card is held, and which is the same instruction said twice rather
+        // than a third control competing for the row.
         const hidden = half.trayCard.dataset.hidden === "1";
         const held = view.heldCard;
         const shown = !hidden && held !== null && held !== HIDDEN;
-        buttons.push({
-          label: "Défausser",
-          run: () => this.dispatch({ type: "DiscardHeld", playerId: me }),
-        });
         return {
           prompt: hidden
             ? "Touche la carte pour la revoir"
-            : "Pose-la sur une carte, ou défausse",
+            : "Pose-la sur une carte, ou glisse-la sur la défausse",
           buttons,
           trayFace: shown ? "face" : "back",
           trayCardId: shown ? held : null,
