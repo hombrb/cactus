@@ -1,8 +1,9 @@
 # Handover — next session: more than two players, and a real deploy
 
-Written at the end of the session that shipped the lobby. Read this
-before touching anything. It is in English like `docs/` and the code; the *app*
-is French and must stay French.
+Written at the end of the session that shipped the lobby, and brought up to date by
+the one that made the powers reachable on two phones. Read this before touching
+anything. It is in English like `docs/` and the code; the *app* is French and must
+stay French.
 
 ---
 
@@ -10,8 +11,8 @@ is French and must stay French.
 
 | | |
 |---|---|
-| Repo | `hombrb/cactus`, branch `claude/reprise-handover-ewoyce` |
-| Last commit | the lobby |
+| Repo | `hombrb/cactus`, branch `claude/multiplayer-card-ux-issues-qgg2tn` |
+| Last commit | the drawn card beside your hand |
 | What works today | A complete 2-player game **on one shared phone or on two phones**, joined by a six-character code. End to end. |
 | What is missing | More than two players, and a Git-connected deploy on a real domain. |
 | Engine | `src/engine/`, pure, framework-free |
@@ -22,7 +23,7 @@ is French and must stay French.
 ```bash
 npm install
 npm run dev                       # dev server
-npm test                          # 99 tests, ~5 s
+npm test                          # 111 tests, ~5 s
 npm run build                     # typecheck (app + worker) + vite build
 npm run preview                   # needed by the two scripts below
 npm run shots                     # Chromium at 390×844, fails on clipped cards — Chromium ONLY
@@ -30,8 +31,8 @@ npm run check:pwa                 # manifest, iOS metas, genuine offline reload
 npm run verify                    # all of the above
 
 npm run dev:worker                # wrangler dev on :8787, serves dist/ + /api
-npm run check:room                # 29 protocol checks over raw sockets
-npm run check:lobby               # 33 checks driving two browsers through the UI
+npm run check:room                # 24 protocol checks over raw sockets
+npm run check:lobby               # 48 checks driving two browsers through the UI
 npm run check:online              # both of the above
 ```
 
@@ -57,8 +58,10 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
 
 ### Done and verified
 
-- **Engine**: unchanged this session except for host promotion. Full `standard`
-  and `school` rulesets, all powers, snap, scoring.
+- **Engine**: full `standard` and `school` rulesets, all powers, snap, scoring.
+  Touched twice since the refactor: host promotion, and one bound in
+  `isLegalTarget` that closed the black King's free reveal (trap-worthy, but it is
+  a rule, so it lives in docs/06 §2 rather than in §5 below).
 - **Rules are choosable, not just presets.** `Réglages → Pouvoirs` edits
   `powers.map` rank by rank, and `deck.seedDiscard` / `turn.takeFromDiscard`
   turn the opening face-up card and taking the discard on and off. A preset is
@@ -97,6 +100,34 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
   action is unchanged, so replays are too. `Réglages → Fin de tour automatique`
   turns it off, and the host's choice reaches a room. New state field:
   `previousPlayerId`.
+- **And the powers can actually be aimed.** Reported from a real two-phone game as
+  "with a Jack or a 7 it often does nothing", which turned out to be five bugs
+  wearing one coat — traps 21-25, all client-side, the engine and the authority
+  right throughout. A hold that latched without being able to decline; a hold that
+  earned a grant a round trip too late; eight pixels of slide that lifted the card
+  for a snap instead; a dead band between the tap slop and the snap threshold where
+  nothing at all happened; and, worst, gestures wired to card elements that had
+  already been thrown away, so **one penalty card left a player's own half
+  accepting no touch for the rest of the match**. Holding the card a power is asking
+  about now chooses it *and* reveals it under the finger, which is the gesture a
+  player reaches for anyway.
+  Three more found on the way: the black King could read the **whole opposing hand**
+  one tap at a time (`POWER_AWAIT_SWAP_CONFIRM` leaves `pendingPower` in place and
+  nothing bounded the target count — docs/06 §2); the opening peek pointed at the
+  two cards it does *not* cover, so following the prompt showed nothing (the
+  peekable pair is ringed now, through `targetableBy`); and a snapped card visibly
+  fell back into its slot before flying, online only.
+- **A swap is something you can follow.** The two legs bow to opposite sides and
+  take longer over it, and both slots stay ringed for a couple of seconds — on both
+  phones, which is the point: a swap is public in position, so the player it
+  happened *to* is entitled to know which of their cards changed.
+- **The drawn card sits beside your hand, and you drag it to throw it away.**
+  Online only — the edge row exists so a hand can cover it, which is a shared-phone
+  concern (docs/10 §6 rule 1). The row slides left, the card lands to its right, and
+  the opponent's device shows the *back* of it in the same place, so their turn
+  stops happening off screen. Dragging it onto the discard throws it away and onto
+  one of your own cards places it; the "Défausser" button is gone and tapping the
+  discard pile is the tap-only twin of the drag.
 - **Powers that target an opponent work in a room.** They never did: the board
   gated every slot gesture on "is this seat mine", so with one seat per device
   the opponent's half accepted no input at all and `PEEK_OPPONENT` / the second
@@ -104,13 +135,18 @@ scripts point at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` explicitly
   answers "which seat may act" and "which slot may be aimed at" separately.
   docs/10 §3 records the rule; `tests/targeting.test.ts` and both online checks
   cover it.
-- **Tests**: 99 in `npm test` — the 37-step worked trace, the invariant sweep
+- **Tests**: 111 in `npm test` — the 37-step worked trace, the invariant sweep
   (now including an assembled config: custom powers, no opening discard, stock
-  only, and the late announcement interleaved with everything else), the
-  projection/wire-format sweep, 21 room tests, 15 config tests covering what a
-  client is allowed to ask for, 14 on the announcement window, 12 on who may aim
-  at what, and 13 on events → card movements. Plus 29 protocol checks and 33
-  two-browser checks against a real Durable Object.
+  only, and the late announcement interleaved with everything else, and a
+  `PowerTarget` offered in `POWER_AWAIT_SWAP_CONFIRM` so the King's bound is
+  walked), the projection/wire-format sweep, 21 room tests, 16 config tests
+  covering what a client is allowed to ask for, 14 on the announcement window, 16
+  on who may aim at what, 14 on events → card movements, and 7 on the powers
+  themselves. Plus 24 protocol checks and 48 two-browser checks against a real
+  Durable Object — `check:lobby` grew four scenarios: a power aimed at your own
+  hand by *holding* it (with a 10 px slide, which used to snap instead), the drawn
+  card dragged onto the discard, the column it sits in beside the hand, and a swap
+  whose marker has to appear on the victim's phone as well as the swapper's.
 
 ### Known gaps (deliberate, not forgotten)
 
@@ -182,6 +218,13 @@ an authenticated Cloudflare account. See §7.
 1-4 came out of the network work. 11-14 are all layout, and all cost a real
 device or a real second browser to find — they are the ones a passing gate will
 not save you from. The rest predate this session and are still live.
+
+21-26 came out of the session that made the powers reachable again, and they are
+worth reading as a group: **five separate bugs all presented as "the power
+sometimes doesn't work"**, none of them in the engine, and not one of them visible
+to a gate that only ever clicks buttons. If a gesture is not doing what it looks
+like it should, the recogniser and the node it is attached to are the first two
+places to look, in that order.
 
 1. **A hibernating Durable Object loses everything in memory while its sockets
    stay open.** Hence: the snapshot is persisted after every action, an open
@@ -276,7 +319,60 @@ not save you from. The rest predate this session and are still live.
     leaks: `mergeSeatEvents` deliberately picks the *most entitled* of the two
     seats' redacted streams, so it will hand you a real card id for a card the
     board is showing as a back.
-21. **Whatever the page does not paint, iOS fills from the *root* element.**
+21. **Never re-derive a node from `half.slots` inside the `map` that builds it.**
+    The array is still the *previous* layout's nodes until the assignment
+    completes, so `attachSlotGestures` used to wire every gesture to a card that
+    had just been thrown away: four of them when a penalty card grew the layout to
+    five, and *all* of them when the next deal shrank it back to four. That half
+    then accepted no tap, no hold and no placement for the rest of the match — no
+    power target, no `PlaceInSlot`, no initial peek. It was correct by accident on
+    the first build only, because the array is empty then and the `?? children[i]`
+    fallback happened to pick the right node. The element is passed in now and the
+    lookup is gone. `shots.mjs` grows a layout deliberately and then taps a slot;
+    before that it swiped once and only ever clicked buttons afterwards, which is
+    how this survived so long.
+22. **`attachGestures` returns a detacher, and it is the only thing that can end a
+    gesture whose node is being destroyed.** A penalty card landing while a finger
+    is down removes the element mid-hold: no `pointerup` reaches it, so
+    `onLongPressEnd` never fires and the look stays open on a card that has moved.
+    Store the detachers and call them before `innerHTML = ""`. But note the
+    consequence — detaching fires `onDragEnd` — so the drag bookkeeping has to be
+    **"cancel only what nothing claimed"**: `dragPending` marks a card whose action
+    is already on its way, and the sweep after `takeOff` only cancels a drag the
+    finger has already let go of. Otherwise the rebuild cancels the very drag
+    `takeOff` was about to adopt.
+23. **A gesture handler that cannot decline swallows the tap.** Tap, hold and
+    inward drag overlap on the same pixels, so whichever fires first must be able
+    to hand the input back — `onLongPressStart` and `onDragStart` both return
+    `false` for that, and the recogniser must ask *before* it latches. A hold on a
+    card with nothing to reveal latched anyway and refused the release's tap, which
+    is why holding your own card during a Jack or a 7 did nothing at all. Related:
+    the tap slop is the width of a **dead band** — above it the hold is cancelled
+    and the tap refused, so between it and the 26 px snap threshold nothing
+    happens. 12 px was under a sixth of a card; cards use 18.
+24. **A grant can arrive after the finger is already down.** `RemoteClient.dispatch`
+    is fire-and-forget, so the `CardRevealed` a gesture earns comes back a round
+    trip later — `beginLook` in the same tick finds nothing. `HalfRefs.pressing`
+    remembers the ref and the look starts when the grant lands. Without it the
+    first press of every round revealed nothing and players learned to press twice.
+    Clear it wherever grants are dropped, or a finger still down re-opens a look on
+    the next update.
+25. **Anything derived from events for *rendering* must read `update.events`, not
+    `mergeSeatEvents`.** The merged stream is `[]` whenever motion is off — and both
+    browser gates run reduced-motion, as does any player who asked their phone to.
+    A marker built on it would be invisible to exactly the people and the tests
+    most likely to need it. Corollary: reduced motion turns off *movement*, not
+    *information*, which is why `--mark` is not zeroed with the other durations.
+26. **A card sized in percent inside a `max-content` wrapper paints nowhere near
+    the box it reports.** `.held` was `display: grid; place-items: center`, so the
+    wrapper sized to its content and the content was a card whose width was 100% of
+    the wrapper — trap 11 again, from the other direction. Chromium resolved it
+    without complaint and `getBoundingClientRect` returned a plausible rect, but
+    `elementFromPoint` at the centre of that rect hit the *wrapper*, so every
+    pointer gesture missed the card. `align-items: stretch` gives the card a
+    definite width to be a percentage of. If a gesture on a card mysteriously does
+    nothing, check `elementFromPoint` before you check the recogniser.
+27. **Whatever the page does not paint, iOS fills from the *root* element.**
     The felt used to live on `#app`, which is `position: fixed; inset: 0` and so
     only ever covered the layout viewport. In an installed web app the strip
     left below it showed the flat `--felt-deep` of `html, body` — darker than

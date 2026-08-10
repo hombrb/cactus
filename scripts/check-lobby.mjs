@@ -73,28 +73,27 @@ function halfInfo(page, seat) {
 
 const ALL_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
+const promptOf = (page) =>
+  page.evaluate(
+    () => document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "",
+  );
+
 /**
- * A power aimed at the opponent's half, from a phone that holds one seat.
+ * Two phones in a room of their own, past the peek barrier, with the ruleset the
+ * scenario needs.
  *
- * The regression this exists for: every slot gesture used to be gated on "is this
- * half mine", so in a room the opponent's cards accepted no input at all.
- * `PEEK_OPPONENT` (docs/06 §4) would sit there with the prompt "Regarde une carte
- * adverse" and nothing to tap, until the 45-second turn clock skipped it. Neither
- * `check-room` nor the flat-table screenshots could see it: the authority was
- * always willing, and the flat table owns both halves.
- *
- * Its own pair of phones and its own room, because it needs every rank to be that
- * power — a choice the host is allowed to make, and the only way to be
- * deterministic about a deal the server seeds.
+ * Every power scenario wants every rank to be *its* power — a choice the host is
+ * allowed to make, and the only way to be deterministic about a deal the server
+ * seeds — so each one needs its own room. `player` is whoever was dealt the first
+ * turn; `other` is the phone watching.
  */
-async function checkOpponentPower() {
-  const powers = Object.fromEntries(ALL_RANKS.map((rank) => [rank, "PEEK_OPPONENT"]));
+async function openRoom(power, { snap = false } = {}) {
   const settings = {
     preset: "standard",
-    snap: false,
+    snap,
     names: ["Joueur 1", "Joueur 2"],
     scoreLimit: 100,
-    powers,
+    powers: Object.fromEntries(ALL_RANKS.map((rank) => [rank, power])),
     seedDiscard: true,
     takeFromDiscard: true,
   };
@@ -121,20 +120,199 @@ async function checkOpponentPower() {
     await page.waitForSelector(".board", { timeout: 10000 });
     await page.getByRole("button", { name: "Prêt sans regarder" }).first().click();
   }
-
-  const prompt = (page) =>
-    page.evaluate(
-      () => document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "",
-    );
   await host.waitForTimeout(400);
-  const hostPlays = (await prompt(host)).includes("Pioche");
-  const player = hostPlays ? host : guest;
-  const other = hostPlays ? guest : host;
 
-  // Draw, then throw it away — which is the only thing that fires a power.
+  const hostPlays = (await promptOf(host)).includes("Pioche");
+  return {
+    host,
+    guest,
+    player: hostPlays ? host : guest,
+    other: hostPlays ? guest : host,
+    close: async () => {
+      await host.context().close();
+      await guest.context().close();
+    },
+  };
+}
+
+/** The centre of an element, in viewport coordinates. */
+async function centreOf(page, selector) {
+  const box = await page.locator(selector).boundingBox();
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/**
+ * Hold a card down for `ms`, optionally sliding `drift` pixels first, and report
+ * what it looked like while the finger was there.
+ *
+ * The drift is the point of it: a tap that moves a little used to produce nothing
+ * at all — past the 12px slop the hold was cancelled and the tap refused, and
+ * eight pixels inward lifted the card for a snap instead.
+ */
+async function holdCard(page, selector, { ms = 500, drift = 0 } = {}) {
+  const at = await centreOf(page, selector);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  if (drift !== 0) {
+    await page.mouse.move(at.x, at.y - drift, { steps: 3 });
+  }
+  await page.waitForTimeout(ms);
+  const face = await page.locator(selector).getAttribute("data-face");
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  return { face, released: await page.locator(selector).getAttribute("data-face") };
+}
+
+/**
+ * The drawn card, dragged onto the discard pile.
+ *
+ * There is no "Défausser" button any more, so this is the gesture the game is
+ * played with — and it goes through `FlightLayer.lift`, whose clone the landing
+ * has to adopt rather than duplicate.
+ */
+async function checkHeldDrag(actor) {
+  const from = await centreOf(actor, '.half[data-seat="bottom"] .card--tray');
+  const to = await centreOf(actor, ".pile--discard");
+
+  await actor.mouse.move(from.x, from.y);
+  await actor.mouse.down();
+  await actor.mouse.move(from.x, from.y - 20, { steps: 3 });
+  await actor.mouse.move(to.x, to.y, { steps: 8 });
+  const lit = await actor.evaluate(
+    () => document.querySelector('.pile--discard[data-drop="1"]') !== null,
+  );
+  check(lit, "the discard pile lights up under a card being dragged onto it");
+
+  await actor.mouse.up();
+  await actor.waitForTimeout(400);
+  check(
+    !(await promptOf(actor)).includes("Pose-la"),
+    "and releasing it there throws the card away",
+  );
+  check(
+    (await actor.evaluate(() => document.querySelectorAll(".card--flight").length)) === 0,
+    "with nothing left stranded in the flight layer",
+  );
+}
+
+/**
+ * A power aimed at one of your *own* cards, by holding it.
+ *
+ * Two regressions at once, and the pair of them is what "the powers don't always
+ * work" was. The hold latched unconditionally, so a dwell on your own card refused
+ * the tap that would have chosen it *and* revealed nothing — there is no grant to
+ * look at yet. And online the grant the choice earns arrives a round trip later,
+ * by which time a naive implementation has stopped caring where the finger is.
+ *
+ * `check-lobby` could not have caught either before: it made every rank
+ * `PEEK_OPPONENT`, which never asks for one of your own cards, and Playwright's
+ * `.click()` neither dwells nor moves.
+ */
+async function checkOwnPower() {
+  const room = await openRoom("PEEK_OWN", { snap: true });
+  const own = (i) => `.half[data-seat="bottom"] .card--slot[data-slot="${i}"]`;
+
+  await room.player.locator(".pile--stock").click();
+  await room.player.waitForTimeout(200);
+  await room.player.locator(".pile--discard").click();
+  await room.player.waitForFunction(
+    () => (document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "")
+      .includes("tes cartes"),
+    { timeout: 5000 },
+  );
+  check(true, "a discard fires a power that has to be aimed at your own hand");
+
+  const offered = await room.player.evaluate(
+    () => document.querySelectorAll('.half[data-seat="bottom"] .card--slot[data-target="1"]').length,
+  );
+  check(offered > 0, `your own cards are offered as targets (${offered} of them)`);
+
+  // Snap is on in this room, so eight pixels of inward slide used to lift the card
+  // for a snap and lose the tap — and twenty-six used to snap it for real.
+  const held = await holdCard(room.player, own(2), { drift: 10 });
+  check(held.face === "face", "holding one of them shows its face under the finger");
+  check(held.released === "back", "and letting go hides it again");
+  check(
+    !(await promptOf(room.player)).includes("tes cartes"),
+    "and the hold is what chose it — the power has resolved",
+  );
+  check(
+    (await room.player.evaluate(
+      () => document.querySelectorAll('.half[data-seat="bottom"] .card--slot').length,
+    )) === 4,
+    "with no penalty card, so the slide was never mistaken for a snap",
+  );
+
+  await room.close();
+}
+
+/**
+ * A blind swap, and whether the player it happened *to* can tell which of their
+ * cards changed.
+ */
+async function checkSwapIsVisible() {
+  const room = await openRoom("BLIND_SWAP");
+
+  await room.player.locator(".pile--stock").click();
+  await room.player.waitForTimeout(200);
+  await room.player.locator(".pile--discard").click();
+  await room.player.waitForFunction(
+    () => (document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "")
+      .includes("une de tes cartes"),
+    { timeout: 5000 },
+  );
+
+  await room.player.locator('.half[data-seat="bottom"] .card--slot[data-slot="1"]').click();
+  await room.player.waitForTimeout(250);
+  await room.player.locator('.half[data-seat="top"] .card--slot[data-slot="2"]').click();
+  await room.player.waitForTimeout(400);
+
+  const marks = (page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.card--slot[data-swapped="1"]')]
+        .map((c) => `${c.closest(".half").dataset.seat}#${c.dataset.slot}`)
+        .sort()
+        .join(","),
+    );
+  check(
+    (await marks(room.player)) === "bottom#1,top#2",
+    `the swapper's phone rings both slots (${await marks(room.player)})`,
+  );
+  // The half that matters: on the other phone the seats are the other way round,
+  // so their own card is the bottom one. A blind swap is public in position
+  // (docs/06 §5), so their device knows this without being told anything private.
+  check(
+    (await marks(room.other)) === "bottom#2,top#1",
+    `and so does the victim's, on their own card (${await marks(room.other)})`,
+  );
+
+  await room.close();
+}
+
+/**
+ * A power aimed at the opponent's half, from a phone that holds one seat.
+ *
+ * The regression this exists for: every slot gesture used to be gated on "is this
+ * half mine", so in a room the opponent's cards accepted no input at all.
+ * `PEEK_OPPONENT` (docs/06 §4) would sit there with the prompt "Regarde une carte
+ * adverse" and nothing to tap, until the 45-second turn clock skipped it. Neither
+ * `check-room` nor the flat-table screenshots could see it: the authority was
+ * always willing, and the flat table owns both halves.
+ *
+ * Its own pair of phones and its own room, because it needs every rank to be that
+ * power — a choice the host is allowed to make, and the only way to be
+ * deterministic about a deal the server seeds.
+ */
+async function checkOpponentPower() {
+  const room = await openRoom("PEEK_OPPONENT");
+  const { player, other } = room;
+
+  // Draw, then throw it away — which is the only thing that fires a power. There
+  // is no "Défausser" button any more: the card is dragged onto the discard, and
+  // tapping the pile says the same thing.
   await player.locator(".pile--stock").click();
   await player.waitForTimeout(200);
-  await player.getByRole("button", { name: "Défausser" }).click();
+  await player.locator(".pile--discard").click();
   await player.waitForFunction(
     () => (document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "")
       .includes("adverse"),
@@ -205,8 +383,7 @@ async function checkOpponentPower() {
   );
   check(announced.includes("cactus"), "the other phone is told, on the announcer's plate");
 
-  await host.context().close();
-  await guest.context().close();
+  await room.close();
 }
 
 const alice = await phone();
@@ -334,11 +511,19 @@ check(actorTray === false, "the drawing player gets the card in their own tray")
 
 const watcherSees = await watcher.evaluate(() => {
   const trays = [...document.querySelectorAll(".card--tray")].filter((c) => !c.hidden);
-  return trays.map((c) => c.dataset.face);
+  return trays.map((c) => `${c.closest(".half").dataset.seat}:${c.dataset.face}`);
 });
 check(
-  watcherSees.every((face) => face !== "face"),
+  watcherSees.every((seen) => !seen.endsWith(":face")),
   "the other phone never renders the drawn card face up",
+);
+// But it does see that a card left the pile and is in a hand. `heldBy` is public
+// and the face is HIDDEN to everyone else, so a back is exactly what the
+// projection permits — and without it the opponent's whole turn happened off
+// screen.
+check(
+  watcherSees.includes("top:back"),
+  `the other phone sees a back in the opponent's hand (${watcherSees.join(", ") || "nothing"})`,
 );
 
 const actorTrayFace = await actor.evaluate(
@@ -346,7 +531,29 @@ const actorTrayFace = await actor.evaluate(
 );
 check(actorTrayFace === "face", "and gets to read it without a second gesture");
 
+// The row slides left and the card sits in the column beside it.
+const beside = await actor.evaluate(() => {
+  const half = document.querySelector('.half[data-seat="bottom"]');
+  const card = half.querySelector(".card--tray");
+  const grid = half.querySelector(".layout__grid");
+  return {
+    holding: half.dataset.holding,
+    inHeldColumn: card.closest(".held") !== null,
+    cardLeft: card.getBoundingClientRect().left,
+    gridRight: grid.getBoundingClientRect().right,
+  };
+});
+check(beside.holding === "1", "the half says it is holding a card");
+check(beside.inHeldColumn, "the drawn card sits in the column beside the hand");
+check(
+  beside.cardLeft >= beside.gridRight - 1,
+  `and to the right of the hand (card at ${Math.round(beside.cardLeft)}, hand ends at ${Math.round(beside.gridRight)})`,
+);
+
+await checkHeldDrag(actor);
 await checkOpponentPower();
+await checkOwnPower();
+await checkSwapIsVisible();
 
 await browser.close();
 console.log(failures === 0 ? "\nlobby checks passed" : `\n${failures} lobby check(s) failed`);

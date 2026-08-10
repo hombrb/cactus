@@ -53,6 +53,14 @@ export interface FlightSpec {
   readonly spin: number;
   /** Kept invisible while the clone is airborne, released when it lands. */
   readonly hide: HTMLElement | null;
+  /**
+   * Bulge this flight out to one side of its straight line — see `Flight.bow`.
+   *
+   * Only a swap sets it, and it earns its complication: the two legs pass each
+   * other rather than through each other, which is the difference between seeing
+   * two cards trade places and seeing one card flicker.
+   */
+  readonly bow?: number | undefined;
 }
 
 export interface DragHandle {
@@ -62,6 +70,17 @@ export interface DragHandle {
   release(to: Rect, toLook: Look, toSpin: number, hide: HTMLElement | null): void;
   /** Not adopted: fall back where it came from. */
   cancel(): void;
+}
+
+/**
+ * A duration token, in milliseconds.
+ *
+ * Read back out of CSS rather than duplicated in TypeScript, which is what makes
+ * `prefers-reduced-motion` — expressed once, in tokens.css, as zeroed durations —
+ * one switch for the JS-driven motion as well as for the declarative kind.
+ */
+export function msToken(name: string, fallback: number): number {
+  return ms(getComputedStyle(document.documentElement).getPropertyValue(name), fallback);
 }
 
 export function rectOf(el: HTMLElement): Rect {
@@ -75,6 +94,10 @@ export function rectOf(el: HTMLElement): Rect {
 const REFERENCE_TRAVEL = 320;
 /** How high a card rises off the table mid-flight, in px. */
 const ARC = 16;
+/** How far a bowed flight leans out of its straight line at the midpoint, in px. */
+const BOW = 34;
+/** A swap is the one movement worth slowing down: it is two cards, not one. */
+const BOW_STRETCH = 1.4;
 /** A dragged card sits a little above the felt. */
 const DRAG_SCALE = 1.06;
 
@@ -119,24 +142,52 @@ export class FlightLayer {
     const dx = centreX(spec.to) - centreX(spec.from);
     const dy = centreY(spec.to) - centreY(spec.from);
     const scale = spec.from.w === 0 ? 1 : spec.to.w / spec.from.w;
-    const ms = this.msFor(Math.hypot(dx, dy));
+    const bow = spec.bow ?? 0;
+    const ms = this.msFor(Math.hypot(dx, dy)) * (bow === 0 ? 1 : BOW_STRETCH);
 
     this.hideNode(spec.hide);
     const flips = spec.fromLook.face !== spec.toLook.face;
     if (flips) window.setTimeout(() => paintCard(el, spec.toLook.face, spec.toLook.card), ms / 2);
 
-    this.run(
-      el,
-      [
-        { transform: transform(0, 0, spec.spin, 1) },
-        // Lifted off the felt and a touch larger at the halfway point, so it
-        // reads as thrown across the table rather than slid along it.
-        { transform: transform(dx / 2, dy / 2 - ARC, spec.spin, ((1 + scale) / 2) * 1.04) },
-        { transform: transform(dx, dy, spec.spin, scale) },
-      ],
-      ms,
-      spec.hide,
-    );
+    this.run(el, this.path(dx, dy, spec.spin, scale, bow), ms, spec.hide);
+  }
+
+  /**
+   * The frames of one flight: lifted off the felt and a touch larger halfway, so
+   * it reads as thrown across the table rather than slid along it.
+   *
+   * A straight flight needs three frames. A bowed one needs five: with three, the
+   * browser interpolates the detour as a chevron, and a chevron does not read as
+   * going *around* something.
+   */
+  private path(
+    dx: number,
+    dy: number,
+    spin: number,
+    scale: number,
+    bow: number,
+  ): Keyframe[] {
+    const steps = bow === 0 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1];
+    // Perpendicular to the travel, in screen space — which is the right space
+    // because `transform()` translates before it rotates.
+    const length = Math.hypot(dx, dy) || 1;
+    const sideX = (-dy / length) * BOW * bow;
+    const sideY = (dx / length) * BOW * bow;
+
+    return steps.map((t) => {
+      // One sine over the flight: zero at both ends, full at the midpoint. The
+      // lift and the lean ride it together, so they cannot disagree about where
+      // the middle of the journey is.
+      const swell = Math.sin(t * Math.PI);
+      return {
+        transform: transform(
+          dx * t + sideX * swell,
+          dy * t - ARC * swell + sideY * swell,
+          spin,
+          scale + (1 - scale) * (1 - t) + (swell * 0.04 * (1 + scale)) / 2,
+        ),
+      };
+    });
   }
 
   /**
@@ -247,9 +298,8 @@ export class FlightLayer {
   // -------------------------------------------------------------------------
 
   private readTokens(): void {
-    const styles = getComputedStyle(document.documentElement);
-    this.duration = ms(styles.getPropertyValue("--flight"), 240);
-    this.durationNear = ms(styles.getPropertyValue("--flight-near"), 160);
+    this.duration = msToken("--flight", 240);
+    this.durationNear = msToken("--flight-near", 160);
     // One switch for CSS and JS alike: reduced motion zeroes the tokens, and a
     // zero-length flight is no flight at all.
     this.motion = this.duration > 0 && !offByQuery();

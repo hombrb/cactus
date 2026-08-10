@@ -64,6 +64,12 @@ export function isLegalTarget(s: GameState, pp: PendingPower, ref: SlotRef): boo
       return ref.playerId !== pp.ownerId;
     case "BLIND_SWAP":
     case "LOOK_AND_SWAP": {
+      // A power holding everything it asked for is waiting for an answer, not
+      // for another target. Without this bound the black King is a free reader:
+      // `POWER_AWAIT_SWAP_CONFIRM` leaves `pendingPower` in place, so a third
+      // target fell back into `askToSwap` and revealed another card, over and
+      // over, across the whole opposing hand.
+      if (pp.targets.length >= 2) return false;
       const first = pp.targets[0];
       if (first === undefined) return ref.playerId === pp.ownerId;
       return ref.playerId !== pp.ownerId && !sameRef(ref, first);

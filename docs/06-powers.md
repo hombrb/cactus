@@ -97,6 +97,7 @@ fn isLegalTarget(state, pp, ref: SlotRef) -> bool
     PEEK_OPPONENT  -> return ref.playerId != pp.ownerId
     GIVE_CARD      -> return ref.playerId != pp.ownerId
     BLIND_SWAP, LOOK_AND_SWAP ->
+      if len(pp.targets) >= 2: return false                        // it has both
       if len(pp.targets) == 0: return ref.playerId == pp.ownerId   // first: yours
       else:                    return ref.playerId != pp.ownerId   // second: theirs
                                   and ref != pp.targets[0]
@@ -105,6 +106,14 @@ fn isLegalTarget(state, pp, ref: SlotRef) -> bool
 The ordering rule for two-target powers (**yours first, then theirs**) is a UI
 affordance as much as a rule: it removes the ambiguity of "which of these two do I
 give away".
+
+> **Why the count is bounded.** A power holding everything it asked for is waiting
+> for an answer, not for another target — and `POWER_AWAIT_SWAP_CONFIRM` leaves
+> `pendingPower` in place, so `validate` still passes there. Without the bound a
+> third `PowerTarget` fell straight back into `askToSwap` and bought another
+> `CardRevealed`, at the same phase, repeatably: the black King could read the whole
+> opposing hand one tap at a time. Bounded, a late target is a **misuse** with a
+> penalty, which is the treatment §2 prescribes for every other illegal target.
 
 ## 3. `PEEK_OWN` — 7, 8
 

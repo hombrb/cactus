@@ -64,11 +64,22 @@ export class RevealGrants {
     return true;
   }
 
-  /** Looking away consumes the grant: you get one look, as at a real table. */
-  endLook(ref: SlotRef): void {
+  /**
+   * Looking away consumes the grant: you get one look, as at a real table.
+   *
+   * `keepGrant` is the one exception, and it is not a loosening: while a decision
+   * is still pending on what the grant revealed — the black King's "swap these
+   * two?" — the player is being asked about cards they are entitled to see, and
+   * they are entitled until they answer. Both looks are single-use and serial, so
+   * consuming them left the King choosing from memory with the pulse already
+   * gone. The card still hides on release, so a shared screen is no more exposed
+   * than before, and `knownBy` is untouched: the projection closes the door by
+   * itself the moment the swap resolves (docs/09 §5, docs/06 §6).
+   */
+  endLook(ref: SlotRef, keepGrant = false): void {
     const k = key(ref);
     if (!this.looking.delete(k)) return;
-    this.granted.delete(k);
+    if (!keepGrant) this.granted.delete(k);
   }
 
   /** Any card still exposed is hidden — used when the round ends abruptly. */

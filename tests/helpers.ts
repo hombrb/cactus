@@ -1,9 +1,58 @@
 // Shared test driving: enumerate every action a state legally invites, so a
 // seeded walk can play whole games without knowing the rules.
 
-import { nearestSlots } from "../src/engine/turn";
+import { buildDeck, cardTable } from "../src/engine/cards";
+import { standard } from "../src/engine/config";
+import { applyAction } from "../src/engine/reduce";
+import { createMatch, createRound, nearestSlots } from "../src/engine/turn";
 import { currentPlayerId } from "../src/engine/state";
 import type { Action, GameState, SlotRef } from "../src/engine/types";
+
+export const A = "a";
+export const B = "b";
+
+/**
+ * A round dealt from the top of a real deck in a chosen order, so a phase can be
+ * reached without hunting for a seed. `front` is `rank + suit` shorthand in
+ * dealing order: A's four, B's four, the discard seed, then the stock.
+ *
+ * The whole deck still has to be there, or card conservation fails (docs/11 §2).
+ * Returns a state past the peek barrier, with A to play.
+ */
+export function round(front: readonly string[]): GameState {
+  const deck = buildDeck(standard);
+  const idOf = new Map(deck.map((c) => [`${c.rank}${c.suit}`, c.id]));
+  const head = front.map((short) => {
+    const id = idOf.get(short);
+    if (id === undefined) throw new Error(`no ${short} in the deck`);
+    return id;
+  });
+  const order = [...head, ...deck.map((c) => c.id).filter((id) => !head.includes(id))];
+
+  const base = createMatch({
+    config: standard,
+    players: [
+      { id: A, name: "A" },
+      { id: B, name: "B" },
+    ],
+    seed: "targeting",
+  });
+  let s = createRound({ ...base, phase: "DEALING" }, order, cardTable(deck)).state;
+  s = applyAction(s, { type: "PeekInitial", playerId: A, slots: [0, 1] }).state;
+  s = applyAction(s, { type: "PeekInitial", playerId: B, slots: [0, 1] }).state;
+  if (s.phase !== "TURN_START") throw new Error(`expected TURN_START, got ${s.phase}`);
+  return s;
+}
+
+/** Eight distinct ranks, a seed that matches none of them, then one free slot. */
+export const CALM = ["2S", "3S", "4S", "5S", "6S", "8S", "10S", "QS", "AS"];
+
+/** Draws the top of the stock and discards it, which is what fires a power. */
+export function firePower(rank: string): GameState {
+  let s = round([...CALM, rank]);
+  s = applyAction(s, { type: "DrawStock", playerId: A }).state;
+  return applyAction(s, { type: "DiscardHeld", playerId: A }).state;
+}
 
 export function candidates(s: GameState): Action[] {
   const me = currentPlayerId(s);
@@ -38,6 +87,10 @@ export function candidates(s: GameState): Action[] {
     case "POWER_AWAIT_SWAP_CONFIRM":
       out.push({ type: "PowerConfirmSwap", playerId: me, swap: true });
       out.push({ type: "PowerConfirmSwap", playerId: me, swap: false });
+      // `pendingPower` is still set here, so `PowerTarget` still validates — and
+      // for a long time it still *resolved*, buying one reveal per tap. Offered
+      // so the sweep walks that path rather than trusting the phase to close it.
+      for (const target of everySlot()) out.push({ type: "PowerTarget", playerId: me, target });
       break;
     case "POWER_AWAIT_OWN_SLOT":
     case "POWER_AWAIT_OPPONENT_SLOT":

@@ -81,14 +81,59 @@ describe("planFlights", () => {
         to: { kind: "slot", playerId: B, slot: 3 },
         cardId: HIDDEN,
         kind: "move",
+        bow: 1,
       },
       {
         from: { kind: "slot", playerId: B, slot: 3 },
         to: { kind: "slot", playerId: A, slot: 0 },
         cardId: HIDDEN,
         kind: "move",
+        bow: -1,
       },
     ]);
+  });
+
+  it("bows the two legs of a swap in opposite directions, and nothing else", () => {
+    const swap = planFlights(
+      [{ type: "CardsSwapped", a: { playerId: A, slot: 1 }, b: { playerId: B, slot: 1 } }],
+      "POWER_AWAIT_TWO_SLOTS",
+    );
+    // Opposite, so they pass each other. Two cards on the same line at the same
+    // speed read as one card flickering, which is why nobody could tell which of
+    // their cards had changed.
+    expect(swap.map((f) => f.bow)).toEqual([1, -1]);
+
+    // Every other movement is a single card and has no partner to avoid.
+    const everythingElse = planFlights(
+      [
+        { type: "StockDrawn", playerId: A, cardId: "d1-2S" },
+        { type: "HeldDiscarded", playerId: A, cardId: "d1-2S", power: "NONE" },
+        {
+          type: "CardPlaced",
+          playerId: A,
+          slot: 0,
+          placedCardId: "d1-3S",
+          discardedCardId: "d1-4S",
+        },
+        { type: "SnapSucceeded", playerId: A, ref: { playerId: A, slot: 2 }, cardId: "d1-5S" },
+        {
+          type: "SnapFailed",
+          playerId: A,
+          ref: { playerId: A, slot: 2 },
+          cardId: "d1-5S",
+          reason: "RANK_MISMATCH",
+        },
+        {
+          type: "PenaltyCardTaken",
+          playerId: A,
+          slot: 4,
+          cardId: "d1-6S",
+          reason: "POWER_MISUSE",
+        },
+      ],
+      "TURN_START",
+    );
+    expect(everythingElse.every((f) => f.bow === undefined)).toBe(true);
   });
 
   it("returns a failed snap to its own slot, and flies the penalty in", () => {

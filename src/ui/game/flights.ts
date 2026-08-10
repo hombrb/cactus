@@ -43,6 +43,15 @@ export interface Flight {
   readonly cardId: CardId | typeof HIDDEN;
   /** `return` = the card goes back where it came from — a failed snap. */
   readonly kind: "move" | "return";
+  /**
+   * Which side of the straight line this leg passes on, when it has a partner
+   * going the other way.
+   *
+   * Set only for the two legs of a swap, and only so they can be *seen* to trade
+   * places: two cards crossing the same line at the same speed read as one card
+   * flickering, which is why nobody could tell which of their cards had changed.
+   */
+  readonly bow?: -1 | 1;
 }
 
 export function sameAnchor(a: Anchor, b: Anchor): boolean {
@@ -118,8 +127,12 @@ export function planFlights(
         // called the layouts have already been reprojected, so there is nothing
         // to name even for the swapper. Both ends fly backs, which is exactly
         // what a blind swap looks like at a table (docs/06 §5).
-        move(at(e.a), at(e.b), HIDDEN);
-        move(at(e.b), at(e.a), HIDDEN);
+        //
+        // Opposite bows, so the two cards go *round* each other. It is the only
+        // movement on this board with a partner, and the only one whose whole
+        // point is which two places were involved.
+        out.push({ from: at(e.a), to: at(e.b), cardId: HIDDEN, kind: "move", bow: 1 });
+        out.push({ from: at(e.b), to: at(e.a), cardId: HIDDEN, kind: "move", bow: -1 });
         break;
 
       case "SnapSucceeded":

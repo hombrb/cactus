@@ -10,60 +10,29 @@
 // the two-seat cases keep the flat table honest.
 
 import { describe, expect, it } from "vitest";
-import { buildDeck, cardTable } from "../src/engine/cards";
 import { standard } from "../src/engine/config";
 import { projectFor } from "../src/engine/project";
 import { applyAction } from "../src/engine/reduce";
-import { createMatch, createRound } from "../src/engine/turn";
+import { nearestSlots } from "../src/engine/turn";
 import type { GameState, PlayerId, PowerKind, Rank } from "../src/engine/types";
 import { actingSeat, targetableBy } from "../src/ui/game/targeting";
-
-const A = "a";
-const B = "b";
-
-/**
- * A round dealt from the top of a real deck in a chosen order, so a phase can be
- * reached without hunting for a seed. `front` is `rank + suit` shorthand in
- * dealing order: A's four, B's four, the discard seed, then the stock.
- *
- * The whole deck still has to be there, or card conservation fails (docs/11 §2).
- */
-function round(front: readonly string[]): GameState {
-  const deck = buildDeck(standard);
-  const idOf = new Map(deck.map((c) => [`${c.rank}${c.suit}`, c.id]));
-  const head = front.map((short) => {
-    const id = idOf.get(short);
-    if (id === undefined) throw new Error(`no ${short} in the deck`);
-    return id;
-  });
-  const order = [...head, ...deck.map((c) => c.id).filter((id) => !head.includes(id))];
-
-  const base = createMatch({
-    config: standard,
-    players: [
-      { id: A, name: "A" },
-      { id: B, name: "B" },
-    ],
-    seed: "targeting",
-  });
-  // Past the peek barrier: both players ready, A to play.
-  let s = createRound({ ...base, phase: "DEALING" }, order, cardTable(deck)).state;
-  s = applyAction(s, { type: "PeekInitial", playerId: A, slots: [0, 1] }).state;
-  s = applyAction(s, { type: "PeekInitial", playerId: B, slots: [0, 1] }).state;
-  expect(s.phase).toBe("TURN_START");
-  return s;
-}
-
-/** Eight distinct ranks, a seed that matches none of them, then one free slot. */
-const CALM = ["2S", "3S", "4S", "5S", "6S", "8S", "10S", "QS", "AS"];
+import { A, B, CALM, firePower, round } from "./helpers";
 
 /** Draws the top of the stock and discards it, which is what fires a power. */
 function withPowerPending(kind: PowerKind, rank: Rank): GameState {
   expect(standard.powers.map[rank]).toBe(kind);
-  let s = round([...CALM, `${rank}S`]);
-  s = applyAction(s, { type: "DrawStock", playerId: A }).state;
-  s = applyAction(s, { type: "DiscardHeld", playerId: A }).state;
+  const s = firePower(`${rank}S`);
   expect(s.pendingPower?.kind).toBe(kind);
+  return s;
+}
+
+/** The black King, all the way to the question it ends on. */
+function awaitingSwapConfirm(): GameState {
+  let s = firePower("KS");
+  expect(s.pendingPower?.kind).toBe("LOOK_AND_SWAP");
+  s = applyAction(s, { type: "PowerTarget", playerId: A, target: at(A, 0) }).state;
+  s = applyAction(s, { type: "PowerTarget", playerId: A, target: at(B, 0) }).state;
+  expect(s.phase).toBe("POWER_AWAIT_SWAP_CONFIRM");
   return s;
 }
 
@@ -121,6 +90,20 @@ describe("targetableBy — powers, one seat per device", () => {
     expect(targetableBy(view(second, A), [A], at(A, 0))).toBeNull();
   });
 
+  it("offers nothing once the King is only waiting for an answer", () => {
+    const s = awaitingSwapConfirm();
+    // Every slot, both halves, both seat shapes: the phase collects no targets,
+    // and offering one is what invited a free reveal per tap (docs/06 §6).
+    for (const owner of [A, B]) {
+      for (let i = 0; i < 4; i++) {
+        expect(targetableBy(view(s, A), [A], at(owner, i))).toBeNull();
+        expect(targetableBy(view(s, A), [A, B], at(owner, i))).toBeNull();
+      }
+    }
+    // The seat is still the one that may act — the answer is still A's to give.
+    expect(actingSeat(view(s, A), [A])).toBe(A);
+  });
+
   it("gives the opponent's phone nothing to tap while the power is not theirs", () => {
     const s = withPowerPending("PEEK_OPPONENT", "9");
     expect(targetableBy(view(s, B), [B], at(A, 0))).toBeNull();
@@ -168,6 +151,58 @@ describe("targetableBy — the flat table holds both seats", () => {
     // B's card is the target, but A is who acts — the distinction the board got
     // wrong when it dispatched as the half it was tapped in.
     expect(targetableBy(view(s, A), [A, B], at(B, 2))).toBe(A);
+  });
+});
+
+describe("targetableBy — the opening peek", () => {
+  /** A dealt round stopped at the barrier, before either player has answered. */
+  function atBarrier(): GameState {
+    const s = round(CALM);
+    // `round` walks past the barrier, so rewind to it: same deal, nobody peeked.
+    return {
+      ...s,
+      phase: "INITIAL_PEEK",
+      players: s.players.map((p) => ({
+        ...p,
+        hasPeeked: false,
+        layout: p.layout.map((slot) => ({ ...slot, knownBy: [] })),
+      })),
+    };
+  }
+
+  it("offers exactly the slots the peek will grant, in this player's own half", () => {
+    const s = atBarrier();
+    const granted = nearestSlots(standard);
+    expect(granted).toEqual([0, 1]);
+
+    for (const i of granted) expect(targetableBy(view(s, A), [A], at(A, i))).toBe(A);
+    for (const i of [2, 3]) expect(targetableBy(view(s, A), [A], at(A, i))).toBeNull();
+    // Never the opponent's, whichever seats this device holds.
+    for (let i = 0; i < 4; i++) expect(targetableBy(view(s, A), [A], at(B, i))).toBeNull();
+  });
+
+  it("belongs to both players at once, not to whoever's turn it is", () => {
+    const s = atBarrier();
+    // `actingSeat` names one seat, because the phase carries a `currentPlayer`.
+    // The peek is simultaneous, so it cannot be the gate here (docs/05 §4).
+    expect(actingSeat(view(s, B), [B])).toBeNull();
+    expect(targetableBy(view(s, B), [B], at(B, 0))).toBe(B);
+    // And at a shared table, both halves at the same time.
+    expect(targetableBy(view(s, A), [A, B], at(A, 0))).toBe(A);
+    expect(targetableBy(view(s, A), [A, B], at(B, 0))).toBe(B);
+  });
+
+  it("stops offering anything once this player has peeked", () => {
+    const peeked = applyAction(atBarrier(), {
+      type: "PeekInitial",
+      playerId: A,
+      slots: [0, 1],
+    }).state;
+    for (let i = 0; i < 4; i++) {
+      expect(targetableBy(view(peeked, A), [A], at(A, i))).toBeNull();
+    }
+    // B has not, and still may.
+    expect(targetableBy(view(peeked, B), [B], at(B, 1))).toBe(B);
   });
 });
 
