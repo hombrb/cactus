@@ -111,6 +111,36 @@ const phase = () =>
  */
 const settleTurn = () => page.waitForTimeout(450);
 
+const promptIn = async (seat) =>
+  (await half(seat).locator(".tray__prompt").textContent()) ?? "";
+
+/** Press a button by name if it is on screen, and say whether it was. */
+async function clickIfOffered(name) {
+  const button = page.getByRole("button", { name });
+  if ((await button.count()) === 0) return false;
+  await button.first().click();
+  await page.waitForTimeout(80);
+  return true;
+}
+
+/**
+ * Draw, throw it away, resolve whatever that fires, and let the turn pass.
+ *
+ * Buttons only, so it works from either half: the piles are shared and the board
+ * dispatches as whoever's turn it is.
+ */
+async function playATurn() {
+  const stock = page.locator(".pile--stock[data-live]");
+  if ((await stock.count()) === 0) return false;
+  await stock.click();
+  await page.waitForTimeout(80);
+  await clickIfOffered("Défausser");
+  await clickIfOffered("Passer");
+  await clickIfOffered("Laisser");
+  await settleTurn();
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 
 await page.goto(`${BASE}/?seed=s4&motion=off`, { waitUntil: "networkidle" });
@@ -219,10 +249,11 @@ if (!handedOver) failures.push("the turn did not end by itself");
 if (!stillOffered) failures.push("Cactus is not offered after the turn has passed");
 await shot("cactus-after-your-turn");
 
-// A snap attempt: swipe a bottom-half card toward the middle. The card's value
-// is unknown to us, so either outcome is fine — what must be true is that the
-// gesture reached the engine, which always changes the board: a success empties
-// the slot, a failure adds a penalty card.
+// A snap attempt: swipe a bottom-half card toward the middle. Under `?seed=s4`
+// this one is a guaranteed *failure* — the bottom player's fourth card is a 3 and
+// the discard is the card they have just thrown away — so it costs a penalty card
+// and the layout grows from four to five. That is asserted rather than tolerated,
+// because the growth is the setup for the check below it.
 
 const slotsBefore = await half("bottom").locator(".card--slot").count();
 const emptyBefore = await half("bottom").locator('.card--slot[data-face="empty"]').count();
@@ -230,16 +261,42 @@ await swipeInward(slot("bottom", 3), "bottom");
 const slotsAfter = await half("bottom").locator(".card--slot").count();
 const emptyAfter = await half("bottom").locator('.card--slot[data-face="empty"]').count();
 
-if (slotsAfter === slotsBefore && emptyAfter === emptyBefore) {
+if (slotsAfter !== slotsBefore + 1 || emptyAfter !== emptyBefore) {
   failures.push(
-    `swipe-to-snap did not reach the engine (slots ${slotsBefore}→${slotsAfter}, empty ${emptyBefore}→${emptyAfter})`,
+    `the failed snap should have cost one penalty card (slots ${slotsBefore}→${slotsAfter}, empty ${emptyBefore}→${emptyAfter})`,
   );
 } else {
-  console.log(
-    `snap wired: slots ${slotsBefore}→${slotsAfter}, empty ${emptyBefore}→${emptyAfter}`,
-  );
+  console.log(`snap wired: slots ${slotsBefore}→${slotsAfter}, empty ${emptyBefore}→${emptyAfter}`);
 }
 await shot("after-snap-attempt");
+
+// --- and the grown layout must still answer the finger -------------------
+//
+// Every slot node was just rebuilt to make room for the penalty card. Wiring them
+// used to read each element back out of the array the same expression was still
+// building, so the four originals bound their gestures to the four cards that had
+// just been thrown away — and the half accepted no tap, no hold and no placement
+// for the rest of the match. It stayed green for a year because nothing below this
+// line ever tapped a card again; only buttons.
+for (let i = 0; i < 6 && !(await promptIn("bottom")).includes("Pioche"); i++) {
+  if (!(await playATurn())) break;
+}
+
+if ((await promptIn("bottom")).includes("Pioche")) {
+  await page.locator(".pile--stock[data-live]").click();
+  await page.waitForTimeout(120);
+  await slot("bottom", 0).click();
+  await page.waitForTimeout(150);
+  const answered = !(await promptIn("bottom")).includes("Pose-la");
+  if (!answered) {
+    failures.push("a slot stopped accepting taps after the layout grew");
+  } else {
+    console.log("the grown layout still takes a tap");
+  }
+  await settleTurn();
+} else {
+  failures.push("could not get back to the bottom player's turn to tap a grown layout");
+}
 
 console.log("phase prompt:", await phase());
 

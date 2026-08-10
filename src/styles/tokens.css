@@ -48,6 +48,15 @@
   --flight: 240ms;
   --flight-near: 160ms;
 
+  /* How long a card stays marked as just-swapped. Read by
+     src/ui/game/board.ts as well as by card.css, so the ring and the timer that
+     ends it cannot disagree.
+
+     Deliberately NOT zeroed below: a still ring is information, not motion, and
+     the player it happened to is the one who needs it. What reduced motion turns
+     off is the fade, in card.css. */
+  --mark: 2600ms;
+
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
 }

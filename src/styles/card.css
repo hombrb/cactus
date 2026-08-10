@@ -152,6 +152,51 @@
     0 14px 22px rgba(0, 0, 0, 0.3);
 }
 
+/* A slot a swap has just exchanged. Both ends are marked, in both halves: a blind
+   swap is public in position and private in content (docs/06 §5), and the player
+   it happened *to* is the one who could not tell which of their cards had changed.
+
+   Spelled as a `box-shadow` because the other three states own everything else:
+   `::before` is the card back's printed panel, `::after` is the grant pulse, and
+   `outline` is `data-target`. `data-chosen` cannot coexist with this one — a swap
+   clears the pending power that set it — but the others can, so this has to layer
+   over them rather than compete.
+
+   The glow fades over the marker's whole life, so it reads as something that just
+   happened rather than something still true. Under reduced motion it holds still
+   instead: it is information, and turning motion off must not turn it off. */
+.card[data-swapped="1"] {
+  animation: swapped var(--mark) var(--ease) forwards;
+}
+
+@keyframes swapped {
+  0%,
+  70% {
+    box-shadow:
+      0 0 0 2px var(--accent),
+      0 0 14px 2px var(--accent-soft),
+      0 1px 1px rgba(0, 0, 0, 0.28),
+      0 6px 14px rgba(0, 0, 0, 0.22);
+  }
+  100% {
+    box-shadow:
+      0 0 0 2px transparent,
+      0 0 14px 2px transparent,
+      0 1px 1px rgba(0, 0, 0, 0.28),
+      0 6px 14px rgba(0, 0, 0, 0.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card[data-swapped="1"] {
+    animation: none;
+    box-shadow:
+      0 0 0 2px var(--accent),
+      0 1px 1px rgba(0, 0, 0, 0.28),
+      0 6px 14px rgba(0, 0, 0, 0.22);
+  }
+}
+
 @keyframes pulse {
   0%,
   100% {

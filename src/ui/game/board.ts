@@ -1,10 +1,11 @@
 import { HIDDEN, type PlayerView, type VisibleCard } from "../../engine/project";
 import { nearestSlots } from "../../engine/turn";
-import type { Action, CardId, PlayerId, SlotRef } from "../../engine/types";
+import type { Action, CardId, Event, PlayerId, SlotRef } from "../../engine/types";
 import type { GameClient } from "../client";
 import { createCardElement, paintCard } from "./card";
 import {
   FlightLayer,
+  msToken,
   rectOf,
   type DragHandle,
   type Look,
@@ -98,6 +99,9 @@ const DRAG_ADOPTION_MS = 1500;
  */
 const SLOT_TAP_SLOP = 18;
 
+const slotKey = (ref: { playerId: PlayerId; slot: number }): string =>
+  `${ref.playerId}|${ref.slot}`;
+
 /** A planned movement, with the source measured before the board was repainted. */
 interface Departure {
   readonly flight: Flight;
@@ -140,6 +144,15 @@ export class Board {
   private dragHeld = false;
   private dragTimer: number | null = null;
   private autoEndTimer: number | null = null;
+  /**
+   * The slots a swap has just moved, held long enough to be noticed.
+   *
+   * In board state rather than left on the elements, because `patchSlots` rewrites
+   * every `data-*` on every patch. Keyed `playerId|slot`, which also dedupes the
+   * flat table's two views of the same event.
+   */
+  private swapped = new Set<string>();
+  private swapTimer: number | null = null;
   private menuOpenFor: PlayerId | null = null;
   private unsubscribe: () => void;
 
@@ -228,6 +241,7 @@ export class Board {
         // The round can end on somebody else's action; anything still exposed
         // has to go the moment it does.
         if (update.events.some((e) => e.type === "RoundRevealed")) this.hideAllGrants();
+        this.markSwaps(update.events);
       }
       this.resumePendingLooks();
 
@@ -246,6 +260,7 @@ export class Board {
     this.unsubscribe();
     if (this.autoEndTimer !== null) clearTimeout(this.autoEndTimer);
     if (this.dragTimer !== null) clearTimeout(this.dragTimer);
+    if (this.swapTimer !== null) clearTimeout(this.swapTimer);
     for (const half of this.halves) for (const detach of half.detach) detach();
     this.flights.destroy();
     this.root.innerHTML = "";
@@ -365,6 +380,43 @@ export class Board {
       },
       { inward, tapSlopPx: SLOT_TAP_SLOP },
     );
+  }
+
+  /**
+   * Ring the two slots a swap has just exchanged, on both halves.
+   *
+   * A blind swap is public in *position* and private in *content* (docs/06 §5), so
+   * this is exactly what everyone at the table is entitled to know — and it is the
+   * half the victim was missing: two backs crossing in a quarter of a second told
+   * them nothing about which of their cards had changed.
+   *
+   * Read from a seat's own `update.events` rather than from the merged stream,
+   * which is empty whenever motion is off — the marker is information, not
+   * animation, and it has to survive `prefers-reduced-motion` and `?motion=off`.
+   */
+  private markSwaps(events: readonly Event[]): void {
+    let marked = false;
+    for (const e of events) {
+      if (e.type === "RoundStarted") {
+        this.swapped.clear();
+        continue;
+      }
+      if (e.type !== "CardsSwapped") continue;
+      for (const ref of [e.a, e.b]) this.swapped.add(slotKey(ref));
+      marked = true;
+    }
+    if (!marked) return;
+
+    if (this.swapTimer !== null) clearTimeout(this.swapTimer);
+    // The duration lives in tokens.css, so the ring and the timer that ends it
+    // cannot drift apart. Long enough to look up and find the two cards, and much
+    // longer than the flight: the flight is what happened, the ring is what
+    // happened *to you*.
+    this.swapTimer = window.setTimeout(() => {
+      this.swapTimer = null;
+      this.swapped.clear();
+      this.patch();
+    }, msToken("--mark", 2600));
   }
 
   /** A pending grant on a slot that is not this half's own. */
@@ -489,6 +541,7 @@ export class Board {
         toLook,
         spin,
         hide: el,
+        bow: flight.bow,
       });
     }
   }
@@ -675,6 +728,9 @@ export class Board {
       )
         ? "1"
         : "0";
+      // Rewriting the same value does not restart the animation, so patching
+      // through a swap does not make the ring stutter.
+      el.dataset.swapped = this.swapped.has(slotKey(ref)) ? "1" : "0";
     });
   }
 
@@ -744,7 +800,12 @@ export class Board {
     // finger is still here.
     half.pressing = ref;
     if (peeking) this.ensurePeekDispatched(half);
-    else if (!earned && aiming !== null) {
+    else if (aiming !== null) {
+      // Even when a grant is already sitting on this card. The power is the live
+      // question, and an unused peek grant on the very card the board is asking
+      // about used to answer it with a look instead of a choice — which is the
+      // report ("sometimes the Jack just does nothing") in miniature. Holding it
+      // now does both: it is chosen, and its face comes up under the finger.
       this.dispatch({ type: "PowerTarget", playerId: aiming, target: ref });
     }
     if (grants?.beginLook(ref)) this.patch();
