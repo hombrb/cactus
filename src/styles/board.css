@@ -116,7 +116,11 @@
   width: 100%;
 }
 
-/* Where the card being dragged would land if the finger let go now. */
+/* Where the card being dragged would land if the finger let go now.
+   Here rather than in card.css because it marks a `.pile` as well as a `.card` —
+   and because board.css is imported *after* card.css, which is what lets the
+   dashed ring replace `data-target`'s solid one on the slot under the finger
+   instead of tying with it. */
 .card[data-drop="1"],
 .pile[data-drop="1"] {
   outline: 2px dashed var(--accent);

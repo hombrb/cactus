@@ -442,8 +442,11 @@ export class Board {
         // afford a real drop target — which is far harder to fire by accident.
         onDragStart: () => this.onHeldDragStart(half),
         onDragMove: (at) => {
-          this.drag?.moveTo(at.clientX, at.clientY);
+          // Measured before the clone is moved, not after: the other order writes
+          // a transform and then reads a rect, which forces a layout every frame
+          // of the drag.
           this.markDrop(half, at);
+          this.drag?.moveTo(at.clientX, at.clientY);
         },
         onDragEnd: (release) => this.onHeldDragEnd(half, release),
       },
