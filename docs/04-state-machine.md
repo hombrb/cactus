@@ -63,6 +63,12 @@ stateDiagram-v2
     TURN_END --> TURN_START : AnnounceCactus, final lap begins
     TURN_END --> REVEAL : final lap exhausted / layout emptied / stock dead
 
+    note right of TURN_END
+        AFTER_TURN: the previous player may
+        announce from anywhere in-round,
+        without changing the phase (01 §7)
+    end note
+
     REVEAL --> ROUND_END : scores computed
     ROUND_END --> DEALING : StartNextRound
     ROUND_END --> MATCH_END : limit reached
@@ -106,7 +112,8 @@ normal outcome, not an error ([README](README.md)).
 | any `POWER_*` | `PowerSkip` | `P == C` | `TURN_END` | `PowerDeclined` |
 | any `POWER_*` | `PowerTarget` **illegal** | guard failed | `TURN_END` | `PenaltyCardTaken(reason: POWER_MISUSE)` |
 | any `POWER_*` | `Timeout` | token fresh | `TURN_END` | `PowerDeclined` |
-| `TURN_END` | `AnnounceCactus` | `P == C`, `cfg.announce.timing == END_OF_TURN`, no announcer yet | `TURN_START` (next player) | `CactusAnnounced`, `TurnEnded`, `TurnStarted` |
+| `TURN_END` | `AnnounceCactus` | `P == C`, `cfg.announce.timing != INSTEAD_OF_TURN`, no announcer yet | `TURN_START` (next player) | `CactusAnnounced`, `TurnEnded`, `TurnStarted` |
+| **in-round\***, not `P`'s turn | `AnnounceCactus` | `cfg.announce.timing == AFTER_TURN`, `P == previousPlayerId`, `P` active, no announcer yet | **unchanged** — the current player keeps their turn | `CactusAnnounced` |
 | `TURN_END` | `EndTurn` | `P == C` | `TURN_START`, or `REVEAL` if round-over | `TurnEnded`, `FinalLapAdvanced`?, `TurnStarted` \| `RoundRevealed` |
 | `TURN_END` | `Timeout` | token fresh, window `cfg.timing.endOfTurnWindowMs` | as `EndTurn` | same |
 | **in-round\*** | `Snap` | see [07](07-snap.md) | unchanged, or `AWAIT_SNAP_GIVE`, or `REVEAL` | `SnapSucceeded` \| `SnapFailed`, `SlotEmptied`?, `PenaltyCardTaken`? |
@@ -123,6 +130,10 @@ normal outcome, not an error ([README](README.md)).
 all `POWER_*`, `TURN_END`. Snap is **not** legal in `LOBBY`, `DEALING`,
 `INITIAL_PEEK`, `REVEAL`, `ROUND_END`, `MATCH_END`, and is disabled entirely when
 `cfg.snap.enabled == false`.
+
+**Snap and the late announcement are the only two actions a player may take while
+it is not their turn**, and they are the only two rows above whose guard is not
+`P == C`. Both leave the phase alone.
 
 ### Action coverage
 

@@ -360,24 +360,49 @@ and it just opened a snap window (`discardVersion` incremented).
 ## 6. Announcing
 
 ```
+// AFTER_TURN only: you have played, and the next player has not finished.
+// `previousPlayerId` is set by onEndTurn (§7), so it moves on by itself.
+fn inAnnounceWindow(state, playerId) -> bool
+  if state.config.announce.timing != AFTER_TURN:      return false
+  if state.previousPlayerId != playerId:              return false
+  if state.announcerId != null:                       return false
+  if playerOf(state, playerId).eliminated:            return false
+  return state.phase not in { REVEAL, ROUND_END, MATCH_END }
+
 fn validate(state, AnnounceCactus { playerId }) -> Verdict
   cfg = state.config
-  if state.announcerId != null:       reject "ALREADY_ANNOUNCED"
-  if not isCurrent(state, playerId):  reject "NOT_YOUR_TURN"
-  if cfg.announce.timing == END_OF_TURN     and state.phase != TURN_END:
-                                      reject "WRONG_PHASE"
+  if state.announcerId != null:              reject "ALREADY_ANNOUNCED"
+  if inAnnounceWindow(state, playerId):      return Ok
+  if not isCurrent(state, playerId):         reject "NOT_YOUR_TURN"
   if cfg.announce.timing == INSTEAD_OF_TURN and state.phase != TURN_START:
-                                      reject "WRONG_PHASE"
+                                             reject "WRONG_PHASE"
+  if cfg.announce.timing != INSTEAD_OF_TURN and state.phase != TURN_END:
+                                             reject "WRONG_PHASE"
   return Ok
 
 fn onAnnounceCactus(state, action) -> (GameState, Event[])
   activeOthers = count(active players in state) - 1
   s = state with { announcerId: action.playerId,
-                   finalLapRemaining: activeOthers,
-                   phase: TURN_END }
-  (s, endEvents) = onEndTurn(s, EndTurn { action.playerId })
+                   finalLapRemaining: activeOthers }
+
+  // Said late, while somebody else is playing: their turn is theirs to finish,
+  // and it is already the first of the final lap.
+  if not isCurrent(state, action.playerId):
+    return (s, [ CactusAnnounced { action.playerId } ])
+
+  (s, endEvents) = onEndTurn(s with { phase: TURN_END }, EndTurn { action.playerId })
   return (s, [ CactusAnnounced { action.playerId } ] + endEvents)
 ```
+
+**The late announcement changes nothing about the round.** `onEndTurn` decrements
+the lap for every non-announcer turn end and `advanceTurn` skips the announcer, so
+a `Cactus` said during the next player's turn produces exactly the lap that the
+same `Cactus` said one action earlier would have. That equivalence is what makes
+the wider window a UI affordance rather than a rules variant, and it is asserted
+in `tests/announce.test.ts`.
+
+It is also **the only action a player may take while it is not their turn**, other
+than a snap.
 
 `cfg.announce.requiresThreshold` is deliberately **not** enforced here. A player
 announces on belief, and the authority must not consult their hand to permit or
@@ -390,7 +415,9 @@ see [11](11-edge-cases-and-invariants.md).
 ```
 fn onEndTurn(state, action) -> (GameState, Event[])
   events = [ TurnEnded { playerId: currentPlayer(state) } ]
-  s = state with { lockedSlots: {} }
+  // Whoever just played takes the announcement window (§6) from whoever held
+  // it, which is how that window closes without anything having to close it.
+  s = state with { lockedSlots: {}, previousPlayerId: currentPlayer(state) }
 
   // the announcer's own turn-end does not consume a final-lap slot:
   // the lap is the *other* players' last turns

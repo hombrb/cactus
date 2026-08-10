@@ -105,6 +105,12 @@ async function swipeInward(locator, seat) {
 const phase = () =>
   page.evaluate(() => document.querySelector(".half .tray__prompt")?.textContent ?? "");
 
+/**
+ * Long enough for the board to end the turn by itself. Reduced motion zeroes the
+ * flights but not this: it is a handover pause, not an animation.
+ */
+const settleTurn = () => page.waitForTimeout(450);
+
 // ---------------------------------------------------------------------------
 
 await page.goto(`${BASE}/?seed=s4&motion=off`, { waitUntil: "networkidle" });
@@ -200,15 +206,23 @@ await longPress(half("bottom").locator(".card--tray"));
 await shot("power-reveal-in-own-tray");
 await release();
 
-await page.waitForTimeout(120);
-await shot("turn-end");
+// The turn ends by itself — there is no button to press — and the offer to say
+// "Cactus" comes with the player into the opponent's turn, until the opponent
+// finishes theirs (docs/01 §7).
+await settleTurn();
+const handedOver = (await half("bottom").locator(".tray__prompt").textContent()).includes(
+  "Au tour de",
+);
+const stillOffered =
+  (await half("bottom").getByRole("button", { name: "Cactus !" }).count()) > 0;
+if (!handedOver) failures.push("the turn did not end by itself");
+if (!stillOffered) failures.push("Cactus is not offered after the turn has passed");
+await shot("cactus-after-your-turn");
 
 // A snap attempt: swipe a bottom-half card toward the middle. The card's value
 // is unknown to us, so either outcome is fine — what must be true is that the
 // gesture reached the engine, which always changes the board: a success empties
 // the slot, a failure adds a penalty card.
-await page.getByRole("button", { name: "Terminer" }).click();
-await page.waitForTimeout(150);
 
 const slotsBefore = await half("bottom").locator(".card--slot").count();
 const emptyBefore = await half("bottom").locator('.card--slot[data-face="empty"]').count();
@@ -257,11 +271,14 @@ for (let i = 0; i < 40; i++) {
     await page.waitForTimeout(120);
     continue;
   }
+  // Present only under the strict `END_OF_TURN` rule; otherwise the turn has
+  // already passed on its own by the time the loop comes round again.
   const finish = page.getByRole("button", { name: "Terminer" });
   if ((await finish.count()) > 0) {
     await finish.first().click();
     await page.waitForTimeout(60);
   }
+  await settleTurn();
   if ((await page.getByRole("button", { name: "Manche suivante" }).count()) > 0) break;
 }
 await shot("reveal-and-scores");

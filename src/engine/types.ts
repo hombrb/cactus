@@ -151,7 +151,17 @@ export interface SnapConfig {
 }
 
 export interface AnnounceConfig {
-  readonly timing: "END_OF_TURN" | "INSTEAD_OF_TURN";
+  /**
+   * When "Cactus" may be said.
+   *
+   * - `END_OF_TURN` — during your own `TURN_END`, before you end it.
+   * - `AFTER_TURN` — once you have played, and still while the next player
+   *   takes their turn; the window closes when *they* end theirs. The turn
+   *   itself then needs no button, since nothing is left to decide in
+   *   `TURN_END`. See docs/01 §7.
+   * - `INSTEAD_OF_TURN` — at `TURN_START`, giving up your turn to say it.
+   */
+  readonly timing: "END_OF_TURN" | "AFTER_TURN" | "INSTEAD_OF_TURN";
   readonly requiresThreshold: number | null;
 }
 
@@ -223,6 +233,13 @@ export interface GameState {
   readonly announcerId: PlayerId | null;
   readonly finalLapRemaining: number | null;
   readonly roundEndReason: RoundEndReason | null;
+  /**
+   * Who ended the most recent turn — i.e. who may still say "Cactus" under
+   * `announce.timing = AFTER_TURN`. It stops being them the moment the next
+   * turn ends, which is exactly the window docs/01 §7 describes. Null until the
+   * round's first turn is over.
+   */
+  readonly previousPlayerId: PlayerId | null;
 
   readonly rngSeed: string;
   readonly rngCursor: number;

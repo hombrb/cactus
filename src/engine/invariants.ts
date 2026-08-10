@@ -62,6 +62,11 @@ export function checkInvariants(s: GameState): string[] {
   if (s.finalLapRemaining !== null && s.finalLapRemaining < 0) {
     problems.push("finalLapRemaining went negative");
   }
+  // The announcement window is a seat, not an index: a stale id would silently
+  // hand the window to nobody, or to somebody who left.
+  if (s.previousPlayerId !== null && !s.turnOrder.includes(s.previousPlayerId)) {
+    problems.push(`previousPlayerId names an unknown player: ${s.previousPlayerId}`);
+  }
 
   const layoutFloor = s.config.deck.handSize;
   for (const p of s.players) {

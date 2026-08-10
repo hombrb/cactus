@@ -180,6 +180,31 @@ async function checkOpponentPower() {
   );
   check(!leaked.includes("face"), "the other phone is shown no face at all");
 
+  // --- the turn ends by itself, and Cactus outlives it --------------------
+  // Nobody pressed anything: the power resolved and the turn passed on. The
+  // player who just played keeps the offer for as long as the other one takes
+  // (docs/01 §7).
+  await player.waitForTimeout(600);
+  const passed = await player.evaluate(
+    () => document.querySelector('.half[data-seat="bottom"] .tray__prompt').textContent ?? "",
+  );
+  check(passed.includes("Au tour de"), "the turn ends without a button");
+  check(
+    (await player.getByRole("button", { name: "Cactus !" }).count()) > 0,
+    "and the player who just played can still say Cactus",
+  );
+  check(
+    (await other.getByRole("button", { name: "Cactus !" }).count()) === 0,
+    "while the one now playing cannot — they have not played yet this window",
+  );
+
+  await player.getByRole("button", { name: "Cactus !" }).first().click();
+  await other.waitForTimeout(500);
+  const announced = await other.evaluate(
+    () => document.querySelector('.half[data-seat="top"] .plate__name').textContent ?? "",
+  );
+  check(announced.includes("cactus"), "the other phone is told, on the announcer's plate");
+
   await host.context().close();
   await guest.context().close();
 }

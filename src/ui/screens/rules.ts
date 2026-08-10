@@ -19,11 +19,17 @@ export function renderRules(root: HTMLElement, cfg: RuleConfig, onBack: () => vo
          <p>Viser une carte interdite coûte une carte de pénalité et met fin à ton tour.</p>`;
 
   const threshold = cfg.announce.requiresThreshold;
+  // The moment you may announce is a rule, so it is read from the config like
+  // everything else on this screen.
+  const when =
+    cfg.announce.timing === "AFTER_TURN"
+      ? "après avoir joué — et encore pendant que l'adversaire joue, tant qu'il n'a pas fini son tour"
+      : "à la fin de ton tour, avant de le terminer";
   const ending =
     threshold !== null
-      ? `<p>Quand tu penses avoir <b>${threshold} points ou moins</b>, annonce <b>Cactus</b> à la fin de ton tour.
+      ? `<p>Quand tu penses avoir <b>${threshold} points ou moins</b>, annonce <b>Cactus</b> ${when}.
           L'adversaire joue un dernier tour, puis on retourne tout. Tous ceux à ${threshold} ou moins « ont cactus ».</p>`
-      : `<p>Annonce <b>Cactus</b> à la fin de ton tour quand tu penses être le plus bas.
+      : `<p>Annonce <b>Cactus</b> ${when}, quand tu penses être le plus bas.
           L'adversaire joue un dernier tour, puis on retourne tout.</p>
          <p>Si tu es bien le plus bas, tu marques <b>0</b>. Sinon${
            cfg.scoring.tieCountsAsFailure ? " — <b>y compris en cas d'égalité</b> —" : ""

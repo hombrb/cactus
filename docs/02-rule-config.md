@@ -158,8 +158,15 @@ because implementers reliably ask.
 
 | Key | Type | Default | Allowed | Read by |
 |-----|------|---------|---------|---------|
-| `announce.timing` | `END_OF_TURN` \| `INSTEAD_OF_TURN` | `END_OF_TURN` | — | `validate(ANNOUNCE_CACTUS)` (05) |
+| `announce.timing` | `AFTER_TURN` \| `END_OF_TURN` \| `INSTEAD_OF_TURN` | `AFTER_TURN` | — | `validate(ANNOUNCE_CACTUS)` (05) |
 | `announce.requiresThreshold` | int? | `null` | `null`, `5`, `6` | `validate(ANNOUNCE_CACTUS)` (05) |
+
+`timing` decides *when*, and it decides more than it looks. `AFTER_TURN` — the
+default — keeps the announcement open until the next player finishes their turn
+([01 §7](01-rules-reference.md#7-ending-the-round)), which also means `TURN_END`
+has nothing left to decide and a turn needs no button to end it. `END_OF_TURN` is
+the strict reading and is the only value for which `timing.endOfTurnWindowMs`
+means anything.
 
 `requiresThreshold` is **not** enforceable against the announcer's real hand — a
 player announces on belief, and the engine cannot read belief. When set, it is
@@ -196,7 +203,7 @@ Not rules. Tuning for networked play; all null on a single shared device.
 | Key | Type | Default | Read by |
 |-----|------|---------|---------|
 | `timing.turnTimeoutMs` | int? | `45000` | `Timeout` handling (05, 10) |
-| `timing.endOfTurnWindowMs` | int? | `3000` | `TURN_END` window (04, 05) |
+| `timing.endOfTurnWindowMs` | int? | `3000` | `TURN_END` window (04, 05) — `END_OF_TURN` only |
 | `timing.snapGraceMs` | int | `250` | `resolveSnapWindow` (07) |
 | `timing.peekRevealMs` | int | `4000` | client only (09) |
 | `timing.initialPeekMs` | int | `10000` | `INITIAL_PEEK` barrier (05) |

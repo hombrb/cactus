@@ -50,7 +50,11 @@ export const standard: RuleConfig = {
     matchOn: "RANK",
   },
   announce: {
-    timing: "END_OF_TURN",
+    // What people actually do at a table: you play, and you say "cactus" — and
+    // the others let you as long as nobody has gone yet. It also means a turn
+    // needs no button to end it (docs/01 §7). `END_OF_TURN` is the stricter
+    // reading, and stays available.
+    timing: "AFTER_TURN",
     requiresThreshold: null,
   },
   scoring: {

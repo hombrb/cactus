@@ -117,6 +117,11 @@ export function summariseRules(cfg: RuleConfig): string[] {
   chips.push(cfg.snap.enabled ? "Défausse rapide" : "Sans défausse rapide");
   if (!cfg.deck.seedDiscard) chips.push("Défausse vide au départ");
   if (!cfg.turn.takeFromDiscard) chips.push("Pioche seulement");
+  chips.push(
+    cfg.announce.timing === "AFTER_TURN"
+      ? "Fin de tour automatique"
+      : "Fin de tour à valider",
+  );
   if (cfg.match.scoreLimit !== null) chips.push(`Fin à ${cfg.match.scoreLimit} points`);
   else if (cfg.match.roundLimit !== null) chips.push(`${cfg.match.roundLimit} manches`);
   return chips;

@@ -23,6 +23,11 @@ statique qui tourne hors ligne, et s'installe depuis Safari via
 | **Glisser vers le centre** | Défausse rapide — la carte suit le doigt |
 | **Toucher la carte piochée** | La recacher : elle arrive face visible, et un adversaire curieux se penche |
 
+Le tour passe tout seul une fois que tu as joué — pas de bouton « Terminer ». Tu
+peux dire **Cactus** après avoir joué, et encore pendant que l'autre joue, tant
+qu'il n'a pas fini son tour. Réglages → *Fin de tour automatique* pour revenir à
+la version stricte.
+
 ## Développement
 
 ```bash

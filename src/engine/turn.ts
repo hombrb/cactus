@@ -83,6 +83,7 @@ export function createMatch(setup: MatchSetup): GameState {
     announcerId: null,
     finalLapRemaining: null,
     roundEndReason: null,
+    previousPlayerId: null,
     rngSeed: setup.seed,
     rngCursor: 0,
     actionCounter: 0,
@@ -161,6 +162,8 @@ export function createRound(
     announcerId: null,
     finalLapRemaining: null,
     roundEndReason: null,
+    // Nobody has played yet, so nobody is inside the announcement window.
+    previousPlayerId: null,
     roundNumber: s.roundNumber + 1,
     turnNumber: 1,
     currentPlayerIndex: (s.dealerIndex + 1) % s.turnOrder.length,
@@ -413,16 +416,32 @@ export function onDiscardHeld(
 // Announcing and ending a turn
 // ---------------------------------------------------------------------------
 
+/**
+ * Under `AFTER_TURN`, the announcement outlives the turn that earned it: the
+ * player who just played may still say it while the next player is playing.
+ * `previousPlayerId` is that window, and it closes on its own when the next turn
+ * ends (docs/01 §7).
+ */
+export function inAnnounceWindow(s: GameState, playerId: PlayerId): boolean {
+  if (s.config.announce.timing !== "AFTER_TURN") return false;
+  if (s.previousPlayerId !== playerId) return false;
+  if (s.announcerId !== null) return false;
+  if (playerOf(s, playerId)?.eliminated !== false) return false;
+  // Not `inRound`: once the round is being revealed it is over for everyone.
+  return s.phase !== "REVEAL" && s.phase !== "ROUND_END" && s.phase !== "MATCH_END";
+}
+
 export function validateAnnounce(
   s: GameState,
   a: Action & { type: "AnnounceCactus" },
 ): Verdict {
   const cfg = s.config;
   if (s.announcerId !== null) return reject("ALREADY_ANNOUNCED");
+  if (inAnnounceWindow(s, a.playerId)) return OK;
   if (currentPlayerId(s) !== a.playerId) return reject("NOT_YOUR_TURN");
-  if (cfg.announce.timing === "END_OF_TURN" && s.phase !== "TURN_END")
-    return reject("WRONG_PHASE");
   if (cfg.announce.timing === "INSTEAD_OF_TURN" && s.phase !== "TURN_START")
+    return reject("WRONG_PHASE");
+  if (cfg.announce.timing !== "INSTEAD_OF_TURN" && s.phase !== "TURN_END")
     return reject("WRONG_PHASE");
   return OK;
   // cfg.announce.requiresThreshold is NOT enforced: a player announces on
@@ -439,13 +458,18 @@ export function onAnnounceCactus(
     ...s,
     announcerId: a.playerId,
     finalLapRemaining: others,
-    phase: "TURN_END",
   };
-  const ended = onEndTurn(announced);
-  return {
-    state: ended.state,
-    events: [{ type: "CactusAnnounced", playerId: a.playerId }, ...ended.events],
-  };
+  const event: Event = { type: "CactusAnnounced", playerId: a.playerId };
+
+  // Said late, while somebody else is playing: their turn is theirs to finish,
+  // and it is already the first of the final lap. Nothing else has to happen —
+  // `onEndTurn` will count it, and `advanceTurn` skips the announcer from here
+  // on, so the lap comes out exactly as it would have at the announcer's own
+  // turn end.
+  if (currentPlayerId(s) !== a.playerId) return { state: announced, events: [event] };
+
+  const ended = onEndTurn({ ...announced, phase: "TURN_END" });
+  return { state: ended.state, events: [event, ...ended.events] };
 }
 
 export function validateEndTurn(s: GameState, a: Action & { type: "EndTurn" }): Verdict {
@@ -456,7 +480,9 @@ export function validateEndTurn(s: GameState, a: Action & { type: "EndTurn" }): 
 
 export function onEndTurn(s: GameState): { state: GameState; events: Event[] } {
   const events: Event[] = [{ type: "TurnEnded", playerId: currentPlayerId(s) }];
-  let state: GameState = { ...s, lockedSlots: [] };
+  // Whoever just played takes the announcement window from whoever held it,
+  // which is how that window closes without anything having to close it.
+  let state: GameState = { ...s, lockedSlots: [], previousPlayerId: currentPlayerId(s) };
 
   // The announcer's own turn-end does not consume a final-lap slot: the lap is
   // the *other* players' last turns.

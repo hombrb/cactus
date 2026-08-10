@@ -71,6 +71,14 @@ export function renderSettings(
         <button class="toggle" type="button" data-act="take" role="switch"></button>
       </section>
 
+      <section class="field field--row">
+        <span>
+          <span class="field__label">Fin de tour automatique</span>
+          <small class="field__note">Le tour passe tout seul, et tu peux encore dire Cactus pendant que l'autre joue.</small>
+        </span>
+        <button class="toggle" type="button" data-act="after" role="switch"></button>
+      </section>
+
       <section class="field field--row" data-limit>
         <span>
           <span class="field__label">Fin de partie</span>
@@ -101,6 +109,7 @@ export function renderSettings(
     paintToggle("snap", current.snap);
     paintToggle("seed", current.seedDiscard);
     paintToggle("take", current.takeFromDiscard);
+    paintToggle("after", current.announceAfterTurn);
 
     // Read the summary back from the assembled config rather than from
     // `current.powers`, so a null override still shows the preset's real map.
@@ -132,7 +141,10 @@ export function renderSettings(
     });
   }
 
-  const bindToggle = (act: string, key: "snap" | "seedDiscard" | "takeFromDiscard") => {
+  const bindToggle = (
+    act: string,
+    key: "snap" | "seedDiscard" | "takeFromDiscard" | "announceAfterTurn",
+  ) => {
     root.querySelector(`[data-act="${act}"]`)!.addEventListener("click", () => {
       current[key] = !current[key];
       commit();
@@ -141,6 +153,7 @@ export function renderSettings(
   bindToggle("snap", "snap");
   bindToggle("seed", "seedDiscard");
   bindToggle("take", "takeFromDiscard");
+  bindToggle("after", "announceAfterTurn");
 
   for (const el of root.querySelectorAll<HTMLElement>("[data-limit-value]")) {
     el.addEventListener("click", () => {
