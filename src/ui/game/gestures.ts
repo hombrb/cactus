@@ -9,6 +9,12 @@
 // The snap race is timestamped at pointerdown, not at gesture completion, so
 // recognition latency never decides who was first (docs/10 §5).
 //
+// Two of the handlers may *decline* — `onLongPressStart` and `onDragStart`. That
+// is what keeps the three gestures from stealing each other's input: a card that
+// has nothing to reveal and nothing to snap latches neither, so the release still
+// ends as the tap the player meant. A recogniser that cannot be declined swallows
+// taps, and a swallowed tap on this board is a power that will not fire.
+//
 // A swipe also *reports its progress*, so the card can follow the finger: the
 // drag begins after a few pixels, the snap is still dispatched the moment the
 // 26px threshold is crossed, and the two are separate flags on purpose. Latching
@@ -17,7 +23,17 @@
 
 export interface GestureHandlers {
   onTap?: () => void;
-  onLongPressStart?: () => void;
+  /**
+   * The finger has dwelled. Return `false` to decline it — the gesture then
+   * behaves as if no long-press handler existed at all, so the release still ends
+   * as a tap.
+   *
+   * Declining is not an optimisation, it is the difference between a working
+   * board and a dead one: a card with nothing to reveal used to latch a hold and
+   * swallow the tap that was aiming a power at it, and the prompt ("Regarde une
+   * de tes cartes") invites exactly that hold.
+   */
+  onLongPressStart?: () => boolean | void;
   onLongPressEnd?: () => void;
   /** `at` is the pointerdown timestamp — the fair moment for a race. */
   onSwipeInward?: (at: number) => void;
@@ -28,8 +44,14 @@ export interface GestureHandlers {
    */
   onDragStart?: () => boolean | void;
   onDragMove?: (at: { clientX: number; clientY: number }) => void;
-  /** Always called if `onDragStart` was — on pointerup and on pointercancel. */
-  onDragEnd?: () => void;
+  /**
+   * Always called if `onDragStart` was — on pointerup and on pointercancel.
+   *
+   * The release point, or `null` when the gesture was cancelled rather than let
+   * go of. A card dropped somewhere lands there; a card whose pointer was taken
+   * away falls back.
+   */
+  onDragEnd?: (release: { clientX: number; clientY: number } | null) => void;
 }
 
 export interface GestureOptions {
@@ -81,10 +103,10 @@ export function attachGestures(
     }
   };
 
-  const endDrag = () => {
+  const endDrag = (release: { clientX: number; clientY: number } | null = null) => {
     if (dragging) {
       dragging = false;
-      handlers.onDragEnd?.();
+      handlers.onDragEnd?.(release);
     }
   };
 
@@ -111,8 +133,11 @@ export function attachGestures(
       longPressTimer = window.setTimeout(() => {
         longPressTimer = null;
         if (resolved) return;
+        // Asked before latching: a declined hold must leave `longPressing` false,
+        // so the release still taps and `onLongPressEnd` never fires for a hold
+        // that never began.
+        if (handlers.onLongPressStart?.() === false) return;
         longPressing = true;
-        handlers.onLongPressStart?.();
       }, longPressMs);
     }
   };
@@ -161,6 +186,9 @@ export function attachGestures(
     const wasDragging = dragging;
     clearTimer();
     endLongPress();
+    // Before `reset()`, whose own `endDrag()` then no-ops: this is the only call
+    // that knows where the finger let go.
+    endDrag({ clientX: e.clientX, clientY: e.clientY });
 
     if (!resolved && !wasDragging && !wasLongPressing && moved <= tapSlop) handlers.onTap?.();
     reset();

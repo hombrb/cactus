@@ -18,6 +18,7 @@
 // flat table, and they are pure so the rule can be tested without a DOM.
 
 import type { PlayerView } from "../../engine/project";
+import { nearestSlots } from "../../engine/turn";
 import type { PlayerId, SlotRef } from "../../engine/types";
 
 /**
@@ -50,6 +51,19 @@ export function targetableBy(
   seats: readonly PlayerId[],
   ref: SlotRef,
 ): PlayerId | null {
+  // The opening peek is answered before `actingSeat` has any meaning: both
+  // players look at once (docs/05 §4), so it belongs to neither of them in
+  // particular. And it is the one moment the board must *point*: the engine grants
+  // `nearestSlots` — the lowest indices by convention — while the grid draws index
+  // 0 in the row furthest from its owner, so a prompt naming a row was telling
+  // players to hold the two cards the peek does not cover. Ringing them says it
+  // without having to be right about which way up the grid is.
+  if (view.phase === "INITIAL_PEEK") {
+    if (!seats.includes(ref.playerId)) return null;
+    if (view.players.find((p) => p.id === ref.playerId)?.hasPeeked !== false) return null;
+    return nearestSlots(view.config).includes(ref.slot) ? ref.playerId : null;
+  }
+
   const actor = actingSeat(view, seats);
   if (actor === null) return null;
 
@@ -62,6 +76,11 @@ export function targetableBy(
 
   if (view.pendingPower) {
     if (view.pendingPower.ownerId !== actor) return null;
+    // The King has seen both cards and is being asked whether to swap them. It is
+    // not collecting targets any more, and offering a slot here invited the
+    // engine's own missing bound — a third target used to buy another reveal
+    // (docs/06 §6).
+    if (view.phase === "POWER_AWAIT_SWAP_CONFIRM") return null;
     const isOwn = ref.playerId === actor;
     const first = view.pendingPower.targets[0];
     switch (view.pendingPower.kind) {

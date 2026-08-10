@@ -45,6 +45,25 @@ interface HalfRefs {
   readonly actions: HTMLElement;
   readonly layout: HTMLElement;
   slots: HTMLElement[];
+  /**
+   * One detacher per slot node, in slot order.
+   *
+   * Kept and called, not for memory — a discarded node and its listeners are
+   * collected anyway — but because `attachGestures`' cleanup is the only thing
+   * that can end a hold or a drag whose element is being destroyed under the
+   * finger. A penalty card landing mid-look used to leave the look open on a
+   * card that had moved.
+   */
+  detach: (() => void)[];
+  /**
+   * The slot this half's finger is currently holding down, if any.
+   *
+   * Online the event that entitles a player to look arrives a round trip after
+   * the hold that earned it (`RemoteClient.dispatch` is fire-and-forget), so the
+   * ref has to outlive the dispatch: when the grant lands, the look begins under
+   * a finger that never moved.
+   */
+  pressing: SlotRef | null;
 }
 
 const REVEAL_PHASES = new Set(["REVEAL", "ROUND_END", "MATCH_END"]);
@@ -57,6 +76,27 @@ const REVEAL_PHASES = new Set(["REVEAL", "ROUND_END", "MATCH_END"]);
  * moved to land, so the handover does not happen underneath it.
  */
 const AUTO_END_MS = 260;
+
+/**
+ * How long a card whose action has been dispatched is left in the air waiting to
+ * be adopted by the movement it caused.
+ *
+ * Longer than any round trip, and it exists only for the actions that answer
+ * with nothing this device can see — a snap that lost its race with
+ * `loserPenalty: NONE` emits a rejection for somebody else and silence for us.
+ */
+const DRAG_ADOPTION_MS = 1500;
+
+/**
+ * How far a finger may drift on a card and still be a tap, or still be a hold.
+ *
+ * The recogniser's 12 px default is under a sixth of a card here, and it was the
+ * width of a dead band: past it the hold was cancelled and the tap refused, so
+ * anything between it and the 26 px snap threshold produced nothing at all. It
+ * also governs how much drift a hold survives, which is what "hold the card you
+ * are aiming at" needs. Buttons and piles keep the default.
+ */
+const SLOT_TAP_SLOP = 18;
 
 /** A planned movement, with the source measured before the board was repainted. */
 interface Departure {
@@ -84,6 +124,21 @@ export class Board {
   /** The card the finger is holding, if any, and where it came from. */
   private drag: DragHandle | null = null;
   private dragFrom: Anchor | null = null;
+  /**
+   * An action has been dispatched for the card in the air, and the movement it
+   * causes is expected to adopt it (`takeOff`).
+   *
+   * Without this the finger lifting first would cancel a drag that was about to
+   * be adopted, which is what a snap looks like online: `onSwipeInward`
+   * dispatches at the threshold, the authority answers a round trip later, and
+   * the card fell back into its slot in between before a fresh clone flew to the
+   * discard. The flat table never showed it — `LocalClient.dispatch` is
+   * synchronous.
+   */
+  private dragPending = false;
+  /** Whether the finger is still on the card in the air. */
+  private dragHeld = false;
+  private dragTimer: number | null = null;
   private autoEndTimer: number | null = null;
   private menuOpenFor: PlayerId | null = null;
   private unsubscribe: () => void;
@@ -157,6 +212,13 @@ export class Board {
       // penalty card does not exist until then.
       const events = this.flights.enabled ? mergeSeatEvents(updates) : [];
       if (events.some((e) => e.type === "RoundStarted")) this.flights.clear();
+      // `RevealGrants.ingest` drops the grants a new deal invalidates; what it
+      // cannot know about is a finger still resting on a card from the last one.
+      // Read from `update.events`, not `events`, which is empty whenever motion is
+      // off (HANDOVER trap 26).
+      if (updates.some((u) => u.events.some((e) => e.type === "RoundStarted"))) {
+        for (const half of this.halves) half.pressing = null;
+      }
       const departures = this.measureDepartures(
         planFlights(events, this.primaryView().phase),
       );
@@ -167,9 +229,15 @@ export class Board {
         // has to go the moment it does.
         if (update.events.some((e) => e.type === "RoundRevealed")) this.hideAllGrants();
       }
+      this.resumePendingLooks();
 
       this.patch();
       this.takeOff(departures);
+      // The finger has gone and nothing adopted the card it left in the air:
+      // this is the answer it was waiting for, and it was not a movement. While
+      // the finger is still down the card stays with it — only the timer in
+      // `dispatchForDrag` can end that.
+      if (this.drag !== null && this.dragPending && !this.dragHeld) this.releaseDrag();
     });
     this.patch();
   }
@@ -177,6 +245,8 @@ export class Board {
   destroy(): void {
     this.unsubscribe();
     if (this.autoEndTimer !== null) clearTimeout(this.autoEndTimer);
+    if (this.dragTimer !== null) clearTimeout(this.dragTimer);
+    for (const half of this.halves) for (const detach of half.detach) detach();
     this.flights.destroy();
     this.root.innerHTML = "";
   }
@@ -200,6 +270,8 @@ export class Board {
 
   private hideAllGrants(): void {
     for (const grants of this.grants.values()) grants.hideAll();
+    // A finger still down must not re-open a look on the next update.
+    for (const half of this.halves) half.pressing = null;
   }
 
   private buildHalf(seat: Seat, playerId: PlayerId): HalfRefs {
@@ -243,6 +315,8 @@ export class Board {
       // widths are measured against, so it must stay free of the cards.
       layout: root.querySelector<HTMLElement>(".layout__grid")!,
       slots: [],
+      detach: [],
+      pressing: null,
     };
 
     root.querySelector(".plate__menu")!.addEventListener("click", () => {
@@ -273,19 +347,23 @@ export class Board {
             this.patch();
           }
         },
+        // Declined when there is nothing here to look at, so a slow tap on the
+        // drawn card still hides it instead of dwelling into nothing.
         onLongPressStart: () => {
           const ref = this.foreignGrant(half);
-          if (ref && this.grantsFor(half)?.beginLook(ref)) this.patch();
+          if (ref === null) return false;
+          if (this.grantsFor(half)?.beginLook(ref)) this.patch();
+          return true;
         },
         onLongPressEnd: () => {
           const ref = this.foreignGrant(half);
           if (ref) {
-            this.grantsFor(half)?.endLook(ref);
+            this.grantsFor(half)?.endLook(ref, this.keepsGrant(half));
             this.patch();
           }
         },
       },
-      { inward },
+      { inward, tapSlopPx: SLOT_TAP_SLOP },
     );
   }
 
@@ -306,6 +384,34 @@ export class Board {
   /** The seat this device owns that may act right now, if any. */
   private actor(): PlayerId | null {
     return actingSeat(this.primaryView(), this.client.seats);
+  }
+
+  /**
+   * Whose hand is over this half: its owner at a shared table, where a gesture in
+   * this half means "the player at this end", and otherwise the one seat this
+   * device holds — which is how a gesture on an opponent's card is expressed.
+   */
+  private fingerOn(half: HalfRefs): PlayerId | null {
+    return half.live ? half.playerId : this.actor();
+  }
+
+  /**
+   * Non-null when this half's own hand is being asked to aim a pending power at
+   * `ref` — then it is not a card to snap and not a card to slide, it is the card
+   * the board is waiting to be told about.
+   *
+   * Not `targetableBy(...) !== null`: at a shared table that also matches the
+   * *victim's* own card during somebody else's swap, and the hand physically over
+   * that half is theirs. Taking their snap away to protect the other player's
+   * power would be the wrong trade.
+   */
+  private aimingAt(half: HalfRefs, ref: SlotRef): PlayerId | null {
+    const view = this.viewFor(half);
+    if (!view.pendingPower) return null;
+    const finger = this.fingerOn(half);
+    return finger !== null && targetableBy(view, this.client.seats, ref) === finger
+      ? finger
+      : null;
   }
 
   /**
@@ -365,8 +471,7 @@ export class Board {
       // second time.
       if (this.drag && this.dragFrom && sameAnchor(this.dragFrom, flight.from)) {
         this.drag.release(to, toLook, spin, el);
-        this.drag = null;
-        this.dragFrom = null;
+        this.forgetDrag();
         continue;
       }
 
@@ -522,14 +627,27 @@ export class Board {
     // Layouts grow (penalty cards) and gain holes (snaps); rebuild only when the
     // count actually changes so cards keep their nodes and their transitions.
     if (half.slots.length !== me.layout.length) {
+      // Before the nodes go: the only moment a gesture still running on one of
+      // them can be ended.
+      for (const detach of half.detach) detach();
+      half.detach = [];
+      // The finger's card is about to stop existing, so nothing may still be
+      // waiting for a grant to land on it.
+      half.pressing = null;
       half.layout.innerHTML = "";
-      half.slots = me.layout.map((_, index) => {
+
+      // Built first, wired after. Wiring inside the `map` reached for
+      // `half.slots`, which is still the *previous* layout's nodes until this
+      // assignment completes — so a grown layout wired four gestures to four
+      // detached cards and a shrunk one wired all of them (HANDOVER trap 22).
+      const slots = me.layout.map((_, index) => {
         const el = createCardElement("card card--slot");
         el.dataset.slot = String(index);
         half.layout.append(el);
-        this.attachSlotGestures(half, index);
         return el;
       });
+      half.slots = slots;
+      half.detach = slots.map((el, index) => this.attachSlotGestures(half, index, el));
       half.layout.dataset.count = String(me.layout.length);
     }
 
@@ -570,41 +688,99 @@ export class Board {
    * `half.live` — a grant on a foreign slot is shown in the actor's own tray,
    * never lit up in the opponent's half, where they could not shield it
    * (docs/10 §6 rule 1).
+   *
+   * So the asymmetry is deliberate: you may **hold** a card that is in front of
+   * you, and only **tap** one that is not.
    */
-  private attachSlotGestures(half: HalfRefs, index: number): void {
-    const el = half.slots[index] ?? half.layout.children[index];
-    if (!(el instanceof HTMLElement)) return;
+  private attachSlotGestures(
+    half: HalfRefs,
+    index: number,
+    el: HTMLElement,
+  ): () => void {
     const ref: SlotRef = { playerId: half.playerId, slot: index };
     const inward = half.seat === "top" ? "down" : "up";
 
-    attachGestures(
+    // The element is passed in, never looked up: re-deriving it from
+    // `half.slots` is what bound every gesture to a card that had already been
+    // thrown away (HANDOVER trap 22).
+    return attachGestures(
       el,
       {
         onTap: () => this.onSlotTap(half, ref),
-        onLongPressStart: half.live
-          ? () => {
-              if (this.viewFor(half).phase === "INITIAL_PEEK") this.ensurePeekDispatched(half);
-              if (this.grantsFor(half)?.beginLook(ref)) this.patch();
-            }
-          : undefined,
-        onLongPressEnd: half.live
-          ? () => {
-              this.grantsFor(half)?.endLook(ref);
-              this.patch();
-            }
-          : undefined,
+        onLongPressStart: half.live ? () => this.onSlotHoldStart(half, ref) : undefined,
+        onLongPressEnd: half.live ? () => this.onSlotHoldEnd(half, ref) : undefined,
         onSwipeInward: () => this.onSlotSwipe(half, ref),
         onDragStart: () => this.onSlotDragStart(half, ref, el),
         onDragMove: ({ clientX, clientY }) => this.drag?.moveTo(clientX, clientY),
-        onDragEnd: () => {
-          // Not adopted by a movement, so the card falls back into its slot.
-          this.drag?.cancel();
-          this.drag = null;
-          this.dragFrom = null;
-        },
+        onDragEnd: () => this.onDragRelease(),
       },
-      { inward },
+      { inward, tapSlopPx: SLOT_TAP_SLOP },
     );
+  }
+
+  /**
+   * A finger has settled on one of this half's own cards.
+   *
+   * Returns false to decline the hold, which hands the gesture back to the tap —
+   * the difference between a card that does nothing and a card that does the wrong
+   * nothing. Three things are worth holding, and nothing else is:
+   *
+   *   - a grant already earned: the look it entitles you to;
+   *   - `INITIAL_PEEK`: the two cards you may see before the game starts;
+   *   - a card this power is asking you to aim at. Holding the card you want to
+   *     look at *is* how you choose it — the prompt says "Regarde une de tes
+   *     cartes", and answering it with a dwell used to select nothing at all.
+   */
+  private onSlotHoldStart(half: HalfRefs, ref: SlotRef): boolean {
+    const view = this.viewFor(half);
+    const grants = this.grantsFor(half);
+    const earned = grants?.has(ref) ?? false;
+    const peeking = view.phase === "INITIAL_PEEK";
+    const aiming = this.aimingAt(half, ref);
+    if (!earned && !peeking && aiming === null) return false;
+
+    // Remembered before the dispatch, not after: online the grant this hold earns
+    // arrives in a later update, and by then the only question is whether the
+    // finger is still here.
+    half.pressing = ref;
+    if (peeking) this.ensurePeekDispatched(half);
+    else if (!earned && aiming !== null) {
+      this.dispatch({ type: "PowerTarget", playerId: aiming, target: ref });
+    }
+    if (grants?.beginLook(ref)) this.patch();
+    return true;
+  }
+
+  private onSlotHoldEnd(half: HalfRefs, ref: SlotRef): void {
+    half.pressing = null;
+    this.grantsFor(half)?.endLook(ref, this.keepsGrant(half));
+    this.patch();
+  }
+
+  /**
+   * Whether letting go should leave the grant unspent — see `RevealGrants.endLook`.
+   * True only while a decision is pending on what was revealed, which today means
+   * the black King's question.
+   */
+  private keepsGrant(half: HalfRefs): boolean {
+    return this.viewFor(half).phase === "POWER_AWAIT_SWAP_CONFIRM";
+  }
+
+  /**
+   * A grant that landed while the finger was already down starts its look now.
+   *
+   * Online the entitling event is a round trip behind the hold that earned it, so
+   * without this the first hold of a round revealed nothing and the player had to
+   * press a second time — which is what "the powers don't always work" felt like
+   * from the outside.
+   */
+  private resumePendingLooks(): void {
+    for (const half of this.halves) {
+      const ref = half.pressing;
+      // `beginLook` is a no-op without a grant and idempotent with one, so this
+      // needs no memory of what it has already resumed.
+      if (ref !== null) this.grantsFor(half)?.beginLook(ref);
+    }
   }
 
   /**
@@ -619,14 +795,18 @@ export class Board {
     // accept a tap after a few pixels of slide, as it did before drags existed.
     if (!this.flights.enabled) return false;
     const view = this.viewFor(half);
+    // The board is asking for this card. A slide of eight pixels used to lift it
+    // for a snap instead, and the tap that was aiming the power went with it.
+    if (this.aimingAt(half, ref) !== null) return false;
     if (!view.config.snap.enabled) return false;
-    const snapper = half.live ? half.playerId : this.actor();
+    const snapper = this.fingerOn(half);
     if (snapper === null) return false;
     if (snapper !== ref.playerId && !view.config.snap.allowOnOpponent) return false;
     if (el.dataset.face === "empty") return false;
 
     const anchor: Anchor = { kind: "slot", playerId: ref.playerId, slot: ref.slot };
     this.dragFrom = anchor;
+    this.dragHeld = true;
     this.drag = this.flights.lift(
       rectOf(el),
       this.lookOf(el, HIDDEN),
@@ -637,21 +817,68 @@ export class Board {
   }
 
   /**
+   * The finger has let go — or the card it was holding is being destroyed.
+   *
+   * A card whose action is already on its way stays in the air: the movement it
+   * causes will adopt it in `takeOff`. Anything else falls back where it came
+   * from.
+   */
+  private onDragRelease(): void {
+    this.dragHeld = false;
+    if (this.dragPending) return;
+    this.releaseDrag();
+  }
+
+  /** Dispatch an action for the card in the air, and expect it to be adopted. */
+  private dispatchForDrag(action: Action): void {
+    if (this.drag !== null) {
+      this.dragPending = true;
+      // Belt and braces: an action the authority never answers — a lost snap
+      // race with no penalty emits nothing this device can see — must not leave
+      // a card stranded over the felt.
+      if (this.dragTimer !== null) clearTimeout(this.dragTimer);
+      this.dragTimer = window.setTimeout(() => this.releaseDrag(), DRAG_ADOPTION_MS);
+    }
+    this.dispatch(action);
+  }
+
+  /** Nothing claimed it: the card falls back into the place it was lifted from. */
+  private releaseDrag(): void {
+    this.drag?.cancel();
+    this.forgetDrag();
+  }
+
+  private forgetDrag(): void {
+    if (this.dragTimer !== null) clearTimeout(this.dragTimer);
+    this.dragTimer = null;
+    this.dragPending = false;
+    this.dragHeld = false;
+    this.drag = null;
+    this.dragFrom = null;
+  }
+
+  /**
    * Snapping. The snapper is the owner of the half when this device holds it —
    * at a shared table a swipe means "the player at this end" — and otherwise the
    * one seat we do own, which is how a snap on an opponent's card is expressed.
    */
   private onSlotSwipe(half: HalfRefs, ref: SlotRef): void {
     const view = this.viewFor(half);
+    // Same reason as the drag: while this hand is being asked to aim a power at
+    // this card, a swipe over it is a mis-recognised tap, and snapping it would
+    // burn both the card and the power.
+    if (this.aimingAt(half, ref) !== null) return;
     if (!view.config.snap.enabled) return;
 
-    const snapper = half.live ? half.playerId : this.actor();
+    const snapper = this.fingerOn(half);
     if (snapper === null) return;
     // Off in every shipped preset; validateSnap would reject it as NOT_YOUR_CARD
     // anyway, and a rejection here would be a free board oracle (docs/07 §3).
     if (snapper !== ref.playerId && !view.config.snap.allowOnOpponent) return;
 
-    this.dispatch({
+    // Through `dispatchForDrag`: the swipe fires at the threshold, so the finger
+    // is usually still down and the card in the air is the one that will land.
+    this.dispatchForDrag({
       type: "Snap",
       playerId: snapper,
       target: ref,
@@ -750,7 +977,7 @@ export class Board {
     } else if (view.phase === "INITIAL_PEEK") {
       prompt = me.hasPeeked
         ? "En attente de l'autre joueur"
-        : "Maintiens tes deux cartes du bas pour les regarder";
+        : "Maintiens tes deux cartes entourées pour les regarder";
       if (!me.hasPeeked) {
         buttons.push({
           label: "Prêt sans regarder",
