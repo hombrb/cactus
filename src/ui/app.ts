@@ -84,6 +84,7 @@ export class App {
       seedDiscard: this.settings.seedDiscard,
       takeFromDiscard: this.settings.takeFromDiscard,
       announceAfterTurn: this.settings.announceAfterTurn,
+      powersOnHandDiscard: this.settings.powersOnHandDiscard,
     };
   }
 

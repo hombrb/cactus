@@ -20,7 +20,7 @@ import {
 } from "./flights";
 import { attachGestures } from "./gestures";
 import { RevealGrants } from "./privacy";
-import { actingSeat, targetableBy } from "./targeting";
+import { actingSeat, entitledSeat, targetableBy } from "./targeting";
 
 type Seat = "top" | "bottom";
 
@@ -847,7 +847,10 @@ export class Board {
     half.stock.textContent = `pioche ${view.stockCount}`;
 
     this.patchSlots(half, view, revealAll);
-    this.patchTray(half, view, revealAll, isCurrent);
+    // Whose turn it is and who may act are two questions, and the tray answers
+    // to the second: a power earned by a snap is resolved out of turn
+    // (docs/06 §10), and so is a snap give (docs/07 §5).
+    this.patchTray(half, view, revealAll, isCurrent, entitledSeat(view) === half.playerId);
   }
 
   private patchSlots(half: HalfRefs, view: PlayerView, revealAll: boolean): void {
@@ -1167,6 +1170,8 @@ export class Board {
     view: PlayerView,
     revealAll: boolean,
     isCurrent: boolean,
+    /** This half is the seat entitled to act — see `entitledSeat`. */
+    entitled: boolean,
   ): void {
     // A half this device does not own has no tray: no prompt addressed to
     // someone else, and above all no private card. The grant lookup below is
@@ -1252,7 +1257,12 @@ export class Board {
         prompt = looking ? "" : "Tu peux regarder cette carte";
       }
 
-      if (isCurrent) {
+      // `entitled` rather than `isCurrent`: a power earned by a snap belongs to
+      // the snapper while somebody else is mid-turn, and it is unusable without
+      // its prompt and its "Passer". Read as `isCurrent`, the consigne and the
+      // buttons went to the wrong half — the current player was offered
+      // somebody else's power, and its owner was offered nothing.
+      if (entitled) {
         const result = this.currentPlayerTray(view, half);
         prompt = result.prompt || prompt;
         for (const b of result.buttons) buttons.push(b);
@@ -1262,7 +1272,12 @@ export class Board {
           trayLabel = result.trayLabel ?? "";
         }
       } else if (!prompt) {
-        prompt = `Au tour de ${view.players.find((p) => p.id === view.currentPlayer)?.name ?? ""}`;
+        const waitingOn = view.players.find((p) => p.id === entitledSeat(view))?.name ?? "";
+        // Naming what they are doing, not just that it is not you: a power taken
+        // out of turn otherwise reads as the board having frozen.
+        prompt = view.pendingPower
+          ? `${waitingOn} utilise un pouvoir`
+          : `Au tour de ${waitingOn}`;
       }
 
       // You have played, the next player is playing, and it is not too late:

@@ -28,8 +28,13 @@ export function checkInvariants(s: GameState): string[] {
   }
 
   // --- structural ---
+  // Against the *interrupted* phase, not the current one. A snap can park a
+  // snap-give or a power on top of a turn that is still holding its drawn card
+  // (docs/07 §4.1, §5), and `resumePhase` is what says so — read against
+  // `s.phase` alone, every such interruption looks like a lost held card.
+  const effectivePhase = s.resumePhase ?? s.phase;
   const heldPhase =
-    s.phase === "AWAIT_HELD_DECISION" || s.phase === "AWAIT_SLOT_FOR_DISCARD";
+    effectivePhase === "AWAIT_HELD_DECISION" || effectivePhase === "AWAIT_SLOT_FOR_DISCARD";
   if (heldPhase !== (s.heldCard !== null)) {
     problems.push(`heldCard/${s.phase} mismatch`);
   }
@@ -45,6 +50,12 @@ export function checkInvariants(s: GameState): string[] {
   }
   if (givePhase && s.resumePhase === null) {
     problems.push("AWAIT_SNAP_GIVE without a resumePhase");
+  }
+  // Both park themselves on `resumePhase`, so a state holding the two of them
+  // has lost one of the phases it owes back. `resolveSuccessfulSnap` keeps them
+  // apart; this is what says so out loud.
+  if (s.pendingPower !== null && s.pendingSnapGive !== null) {
+    problems.push("pendingPower and pendingSnapGive at the same time");
   }
 
   if (s.phase !== "POWER_AWAIT_SWAP_CONFIRM" && s.lockedSlots.length > 0) {

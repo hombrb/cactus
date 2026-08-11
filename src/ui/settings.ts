@@ -14,6 +14,8 @@ export interface Settings {
   takeFromDiscard: boolean;
   /** The turn ends by itself, and "Cactus" can still be said after it. */
   announceAfterTurn: boolean;
+  /** A card of yours that reaches the discard fires its power too. */
+  powersOnHandDiscard: boolean;
 }
 
 const KEY = "cactus.settings.v1";
@@ -27,6 +29,7 @@ export const defaultSettings: Settings = {
   seedDiscard: true,
   takeFromDiscard: true,
   announceAfterTurn: true,
+  powersOnHandDiscard: false,
 };
 
 export function loadSettings(): Settings {
@@ -52,6 +55,9 @@ export function loadSettings(): Settings {
       seedDiscard: parsed.seedDiscard !== false,
       takeFromDiscard: parsed.takeFromDiscard !== false,
       announceAfterTurn: parsed.announceAfterTurn !== false,
+      // `=== true`, not `!== false`, because this one defaults to *off*: an
+      // absent key must read as the written rule, not as the variant.
+      powersOnHandDiscard: parsed.powersOnHandDiscard === true,
     };
   } catch {
     return { ...defaultSettings };
@@ -73,6 +79,7 @@ export function configFrom(s: Settings): RuleConfig {
     {
       ...forTable(base, s.snap),
       deck: { ...base.deck, seedDiscard: s.seedDiscard },
+      powers: { ...base.powers, onHandDiscard: s.powersOnHandDiscard },
       turn: { ...base.turn, takeFromDiscard: s.takeFromDiscard },
       announce: {
         ...base.announce,

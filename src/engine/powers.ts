@@ -1,9 +1,13 @@
 // Power resolution — see docs/06-powers.md
-// A power fires only when a card drawn from the stock is discarded directly.
+// A power fires when a card drawn from the stock is discarded directly, and —
+// with `powers.onHandDiscard` — when a card leaves its owner's layout for the
+// discard (docs/06 §10).
 
+import { powerFor } from "./cards";
 import { drawPenaltyCards } from "./deck";
 import {
   addCardToLayout,
+  cardOf,
   isLocked,
   markKnown,
   playerOf,
@@ -14,10 +18,12 @@ import {
 } from "./state";
 import type {
   Action,
+  CardId,
   Event,
   GameState,
   PendingPower,
   Phase,
+  PlayerId,
   PowerKind,
   SlotRef,
   Verdict,
@@ -40,8 +46,44 @@ export function phaseForPower(kind: PowerKind): Phase {
   }
 }
 
+/**
+ * The one place `pendingPower` is ever set. Returns null when the card has no
+ * power, so the caller keeps whatever phase it had decided on.
+ *
+ * `resumePhase` is what a power owed to a *hand* discard needs and a power owed
+ * to the drawn card does not. A snap happens out of turn (docs/07 §4.1), so the
+ * power interrupts somebody else's phase and `clearPower` has to put it back.
+ * On the turn's own path it is null, and `clearPower` falls to `TURN_END` as it
+ * always did — same mechanism `AWAIT_SNAP_GIVE` already uses.
+ */
+export function beginPower(
+  s: GameState,
+  ownerId: PlayerId,
+  cardId: CardId,
+  resumePhase: Phase | null,
+): { state: GameState; events: Event[] } | null {
+  const kind = powerFor(s.config, cardOf(s, cardId));
+  if (kind === "NONE") return null;
+
+  const state: GameState = {
+    ...s,
+    pendingPower: { kind, sourceCard: cardId, ownerId, targets: [], revealed: [] },
+    resumePhase,
+    phase: phaseForPower(kind),
+  };
+  return { state, events: [{ type: "PowerStarted", playerId: ownerId, kind }] };
+}
+
 export function clearPower(s: GameState): GameState {
-  return { ...s, pendingPower: null, lockedSlots: [], phase: "TURN_END" };
+  return {
+    ...s,
+    pendingPower: null,
+    lockedSlots: [],
+    // Back to the phase the power interrupted, or to the end of the turn that
+    // earned it. See `beginPower`.
+    phase: s.resumePhase ?? "TURN_END",
+    resumePhase: null,
+  };
 }
 
 /**

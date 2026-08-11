@@ -6,6 +6,7 @@
 
 import { ranksMatch } from "./cards";
 import { drawPenaltyCards } from "./deck";
+import { beginPower } from "./powers";
 import { beginReveal } from "./scoring";
 import {
   cardOf,
@@ -99,6 +100,25 @@ function resolveSuccessfulSnap(
   if (cfg.snap.emptyLayoutEndsRound && hasNoCards(state, a.playerId)) {
     const revealed = beginReveal(state, "LAYOUT_EMPTIED");
     return { state: revealed.state, events: [...events, ...revealed.events] };
+  }
+
+  // `powers.onHandDiscard`: the card left this player's own layout for the
+  // discard, so it fires its power for them (docs/06 §10). Three things this
+  // branch is deliberately behind:
+  //
+  //   - The two returns above. A snap on somebody else's card owes them one and
+  //     already needs `resumePhase` for AWAIT_SNAP_GIVE; and that card was not
+  //     in the snapper's layout. A snap that empties the layout has ended the
+  //     round, and there is nothing left to look at.
+  //   - Any power already pending. If A discarded a 9 and is choosing a target
+  //     when B snaps a 7, overwriting `pendingPower` would steal A's power. B's
+  //     snap still stands — only the power it would have earned is dropped.
+  //
+  // `state.phase` is the phase the snap interrupted, untouched above, and it is
+  // what `clearPower` puts back.
+  if (cfg.powers.onHandDiscard && s.pendingPower === null && s.pendingSnapGive === null) {
+    const started = beginPower(state, a.playerId, cardId, state.phase);
+    if (started) return { state: started.state, events: [...events, ...started.events] };
   }
 
   // Phase is untouched: a snap is not a turn. If it lands while the current

@@ -25,6 +25,8 @@ export interface RoomSettings {
   readonly takeFromDiscard: boolean;
   /** The turn ends by itself, and "Cactus" can still be said after it. */
   readonly announceAfterTurn: boolean;
+  /** A card of yours that reaches the discard fires its power too. */
+  readonly powersOnHandDiscard: boolean;
 }
 
 export const defaultRoomSettings: RoomSettings = {
@@ -35,6 +37,7 @@ export const defaultRoomSettings: RoomSettings = {
   seedDiscard: true,
   takeFromDiscard: true,
   announceAfterTurn: true,
+  powersOnHandDiscard: false,
 };
 
 const MAX_SCORE_LIMIT = 1000;
@@ -58,6 +61,9 @@ export function parseRoomSettings(raw: unknown): RoomSettings {
     seedDiscard: input.seedDiscard !== false,
     takeFromDiscard: input.takeFromDiscard !== false,
     announceAfterTurn: input.announceAfterTurn !== false,
+    // Defaults to *off*, so an absent or hostile key has to fall to the written
+    // rule rather than to the variant — hence `=== true`.
+    powersOnHandDiscard: input.powersOnHandDiscard === true,
   };
 }
 
@@ -75,6 +81,7 @@ export function configForRoom(settings: RoomSettings): RuleConfig {
     {
       ...base,
       deck: { ...base.deck, seedDiscard: settings.seedDiscard },
+      powers: { ...base.powers, onHandDiscard: settings.powersOnHandDiscard },
       turn: { ...base.turn, takeFromDiscard: settings.takeFromDiscard },
       snap: { ...base.snap, enabled: settings.snap },
       announce: {

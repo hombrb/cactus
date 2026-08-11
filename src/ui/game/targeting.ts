@@ -22,18 +22,29 @@ import { nearestSlots } from "../../engine/turn";
 import type { PlayerId, SlotRef } from "../../engine/types";
 
 /**
- * The seat this device owns that may act right now, or null when the turn
- * belongs to somebody else's phone.
+ * The seat that may act right now, whoever's phone it is on.
  *
  * A pending power belongs to its owner even when the phase looks like anybody's
  * (docs/06 §2 validates `playerId === pp.ownerId`), and a snap give belongs to
- * the snapper, who is not necessarily the current player (docs/07 §5).
+ * the snapper, who is not necessarily the current player (docs/07 §5). Both can
+ * now be earned out of turn — a snap fires a power under
+ * `powers.onHandDiscard` — so "whose turn is it" is the wrong question and this
+ * is the right one.
  */
-export function actingSeat(view: PlayerView, seats: readonly PlayerId[]): PlayerId | null {
-  const entitled =
+export function entitledSeat(view: PlayerView): PlayerId {
+  return (
     view.pendingPower?.ownerId ??
     (view.phase === "AWAIT_SNAP_GIVE" ? view.pendingSnapGive?.snapperId : undefined) ??
-    view.currentPlayer;
+    view.currentPlayer
+  );
+}
+
+/**
+ * The seat this device owns that may act right now, or null when the turn
+ * belongs to somebody else's phone.
+ */
+export function actingSeat(view: PlayerView, seats: readonly PlayerId[]): PlayerId | null {
+  const entitled = entitledSeat(view);
   return seats.includes(entitled) ? entitled : null;
 }
 

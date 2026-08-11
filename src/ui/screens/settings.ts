@@ -57,6 +57,14 @@ export function renderSettings(
 
       <section class="field field--row">
         <span>
+          <span class="field__label">Pouvoirs sur tes cartes</span>
+          <small class="field__note">Une carte de ton jeu qui part à la défausse — défausse rapide ou carte remplacée — déclenche aussi son pouvoir.</small>
+        </span>
+        <button class="toggle" type="button" data-act="handpower" role="switch"></button>
+      </section>
+
+      <section class="field field--row">
+        <span>
           <span class="field__label">Carte retournée au départ</span>
           <small class="field__note">Ouvre la défausse avec une carte. Sinon la défausse commence vide.</small>
         </span>
@@ -107,6 +115,7 @@ export function renderSettings(
       el.setAttribute("aria-checked", String(el.dataset.preset === current.preset));
     }
     paintToggle("snap", current.snap);
+    paintToggle("handpower", current.powersOnHandDiscard);
     paintToggle("seed", current.seedDiscard);
     paintToggle("take", current.takeFromDiscard);
     paintToggle("after", current.announceAfterTurn);
@@ -143,7 +152,12 @@ export function renderSettings(
 
   const bindToggle = (
     act: string,
-    key: "snap" | "seedDiscard" | "takeFromDiscard" | "announceAfterTurn",
+    key:
+      | "snap"
+      | "seedDiscard"
+      | "takeFromDiscard"
+      | "announceAfterTurn"
+      | "powersOnHandDiscard",
   ) => {
     root.querySelector(`[data-act="${act}"]`)!.addEventListener("click", () => {
       current[key] = !current[key];
@@ -151,6 +165,7 @@ export function renderSettings(
     });
   };
   bindToggle("snap", "snap");
+  bindToggle("handpower", "powersOnHandDiscard");
   bindToggle("seed", "seedDiscard");
   bindToggle("take", "takeFromDiscard");
   bindToggle("after", "announceAfterTurn");

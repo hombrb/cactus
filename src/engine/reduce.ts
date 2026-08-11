@@ -174,7 +174,12 @@ function reduce(s: GameState, a: Action): { state: GameState; events: Event[] } 
  */
 function onTimeout(s: GameState): { state: GameState; events: Event[] } {
   const current = currentPlayerId(s);
-  if (isPowerPhase(s)) return reduce(s, { type: "PowerSkip", playerId: current });
+  // A power belongs to its owner, who is not always the current player: a snap
+  // can earn one out of turn (docs/07 §4.1). Skipping as `current` would earn a
+  // NOT_YOUR_POWER and leave the table parked in the power phase for good.
+  if (isPowerPhase(s)) {
+    return reduce(s, { type: "PowerSkip", playerId: s.pendingPower?.ownerId ?? current });
+  }
 
   switch (s.phase) {
     case "INITIAL_PEEK":
