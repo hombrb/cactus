@@ -6,7 +6,7 @@ import { standard } from "../src/engine/config";
 import { applyAction } from "../src/engine/reduce";
 import { createMatch, createRound, nearestSlots } from "../src/engine/turn";
 import { currentPlayerId } from "../src/engine/state";
-import type { Action, GameState, SlotRef } from "../src/engine/types";
+import type { Action, GameState, RuleConfig, SlotRef } from "../src/engine/types";
 
 export const A = "a";
 export const B = "b";
@@ -14,13 +14,16 @@ export const B = "b";
 /**
  * A round dealt from the top of a real deck in a chosen order, so a phase can be
  * reached without hunting for a seed. `front` is `rank + suit` shorthand in
- * dealing order: A's four, B's four, the discard seed, then the stock.
+ * dealing order: A's hand, B's hand, the discard seed, then the stock.
  *
  * The whole deck still has to be there, or card conservation fails (docs/11 §2).
  * Returns a state past the peek barrier, with A to play.
+ *
+ * `cfg` is for the rule variants: the deal follows `deck.handSize`, so a config
+ * with a smaller hand changes where `front` is cut, not just what the rules say.
  */
-export function round(front: readonly string[]): GameState {
-  const deck = buildDeck(standard);
+export function round(front: readonly string[], cfg: RuleConfig = standard): GameState {
+  const deck = buildDeck(cfg);
   const idOf = new Map(deck.map((c) => [`${c.rank}${c.suit}`, c.id]));
   const head = front.map((short) => {
     const id = idOf.get(short);
@@ -30,7 +33,7 @@ export function round(front: readonly string[]): GameState {
   const order = [...head, ...deck.map((c) => c.id).filter((id) => !head.includes(id))];
 
   const base = createMatch({
-    config: standard,
+    config: cfg,
     players: [
       { id: A, name: "A" },
       { id: B, name: "B" },
@@ -38,8 +41,9 @@ export function round(front: readonly string[]): GameState {
     seed: "targeting",
   });
   let s = createRound({ ...base, phase: "DEALING" }, order, cardTable(deck)).state;
-  s = applyAction(s, { type: "PeekInitial", playerId: A, slots: [0, 1] }).state;
-  s = applyAction(s, { type: "PeekInitial", playerId: B, slots: [0, 1] }).state;
+  const peek = nearestSlots(cfg);
+  s = applyAction(s, { type: "PeekInitial", playerId: A, slots: peek }).state;
+  s = applyAction(s, { type: "PeekInitial", playerId: B, slots: peek }).state;
   if (s.phase !== "TURN_START") throw new Error(`expected TURN_START, got ${s.phase}`);
   return s;
 }
@@ -56,6 +60,11 @@ export function firePower(rank: string): GameState {
 
 export function candidates(s: GameState): Action[] {
   const me = currentPlayerId(s);
+  // A power belongs to its owner, who is only the current player when the drawn
+  // card earned it. Under `powers.onHandDiscard` a snap earns one out of turn, so
+  // offering the power actions as `me` would offer them to nobody and the sweep
+  // would stall at the first snapped 7.
+  const owner = s.pendingPower?.ownerId ?? me;
   const out: Action[] = [];
   const everySlot = (): SlotRef[] =>
     s.players.flatMap((p) => p.layout.map((_, i) => ({ playerId: p.id, slot: i })));
@@ -85,20 +94,20 @@ export function candidates(s: GameState): Action[] {
       }
       break;
     case "POWER_AWAIT_SWAP_CONFIRM":
-      out.push({ type: "PowerConfirmSwap", playerId: me, swap: true });
-      out.push({ type: "PowerConfirmSwap", playerId: me, swap: false });
+      out.push({ type: "PowerConfirmSwap", playerId: owner, swap: true });
+      out.push({ type: "PowerConfirmSwap", playerId: owner, swap: false });
       // `pendingPower` is still set here, so `PowerTarget` still validates — and
       // for a long time it still *resolved*, buying one reveal per tap. Offered
       // so the sweep walks that path rather than trusting the phase to close it.
-      for (const target of everySlot()) out.push({ type: "PowerTarget", playerId: me, target });
+      for (const target of everySlot()) out.push({ type: "PowerTarget", playerId: owner, target });
       break;
     case "POWER_AWAIT_OWN_SLOT":
     case "POWER_AWAIT_OPPONENT_SLOT":
     case "POWER_AWAIT_TWO_SLOTS":
     case "POWER_AWAIT_GIVE_TARGET":
-      out.push({ type: "PowerSkip", playerId: me });
+      out.push({ type: "PowerSkip", playerId: owner });
       // Deliberately includes illegal targets so the misuse path gets exercised.
-      for (const target of everySlot()) out.push({ type: "PowerTarget", playerId: me, target });
+      for (const target of everySlot()) out.push({ type: "PowerTarget", playerId: owner, target });
       break;
     case "AWAIT_SNAP_GIVE": {
       const snapper = s.pendingSnapGive!.snapperId;

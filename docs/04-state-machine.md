@@ -84,6 +84,10 @@ stateDiagram-v2
 ## 3. Transition table
 
 `P` = the acting player. `C` = the current player (`turnOrder[currentPlayerIndex]`).
+`O` = `pendingPower.ownerId`, which is `C` for every power the drawn card earned and
+somebody else for a power a snap earned ([06 §10](06-powers.md)). `resumePhase` is
+null except in that case, so `resumePhase ?? TURN_END` reads as `TURN_END`
+everywhere else.
 Guards that fail produce `ActionRejected` and **no state change** — rejection is a
 normal outcome, not an error ([README](README.md)).
 
@@ -104,19 +108,19 @@ normal outcome, not an error ([README](README.md)).
 | `AWAIT_HELD_DECISION` | `Timeout` | token fresh | as `DiscardHeld` with `PowerSkip` | `HeldDiscarded`, `PowerDeclined`? |
 | `AWAIT_SLOT_FOR_DISCARD` | `PlaceInSlot` | `P == C`, slot in range, not locked | `TURN_END` | `CardPlaced` |
 | `AWAIT_SLOT_FOR_DISCARD` | `Timeout` | token fresh | `TURN_END` | `CardPlaced` into the first legal slot |
-| `POWER_AWAIT_OWN_SLOT` | `PowerTarget` | `P == C`, `target.playerId == P`, slot non-`EMPTY`, not locked | `TURN_END` | `CardRevealed` |
-| `POWER_AWAIT_OPPONENT_SLOT` | `PowerTarget` | `P == C`, `target.playerId != P`, slot non-`EMPTY`, not locked | `TURN_END` | `CardRevealed` |
+| `POWER_AWAIT_OWN_SLOT` | `PowerTarget` | `P == O`, `target.playerId == P`, slot non-`EMPTY`, not locked | `resumePhase ?? TURN_END` | `CardRevealed` |
+| `POWER_AWAIT_OPPONENT_SLOT` | `PowerTarget` | `P == O`, `target.playerId != P`, slot non-`EMPTY`, not locked | `resumePhase ?? TURN_END` | `CardRevealed` |
 | `POWER_AWAIT_TWO_SLOTS` | `PowerTarget` | first target own, second an opponent's; both non-`EMPTY`, not locked | same phase, then `POWER_AWAIT_SWAP_CONFIRM` | `CardRevealed` |
-| `POWER_AWAIT_SWAP_CONFIRM` | `PowerConfirmSwap` | `P == C` | `TURN_END` | `CardsSwapped`? |
-| `POWER_AWAIT_GIVE_TARGET` | `PowerTarget` | `P == C`, `target.playerId != P`, `cfg.powers.aceGiveEnabled` | `TURN_END` | `CardGiven` |
-| any `POWER_*` | `PowerSkip` | `P == C` | `TURN_END` | `PowerDeclined` |
-| any `POWER_*` | `PowerTarget` **illegal** | guard failed | `TURN_END` | `PenaltyCardTaken(reason: POWER_MISUSE)` |
-| any `POWER_*` | `Timeout` | token fresh | `TURN_END` | `PowerDeclined` |
+| `POWER_AWAIT_SWAP_CONFIRM` | `PowerConfirmSwap` | `P == O` | `resumePhase ?? TURN_END` | `CardsSwapped`? |
+| `POWER_AWAIT_GIVE_TARGET` | `PowerTarget` | `P == O`, `target.playerId != P`, `cfg.powers.aceGiveEnabled` | `resumePhase ?? TURN_END` | `CardGiven` |
+| any `POWER_*` | `PowerSkip` | `P == O` | `resumePhase ?? TURN_END` | `PowerDeclined` |
+| any `POWER_*` | `PowerTarget` **illegal** | guard failed | `resumePhase ?? TURN_END` | `PenaltyCardTaken(reason: POWER_MISUSE)` |
+| any `POWER_*` | `Timeout` | token fresh | `resumePhase ?? TURN_END` | `PowerDeclined` |
 | `TURN_END` | `AnnounceCactus` | `P == C`, `cfg.announce.timing != INSTEAD_OF_TURN`, no announcer yet | `TURN_START` (next player) | `CactusAnnounced`, `TurnEnded`, `TurnStarted` |
 | **in-round\***, not `P`'s turn | `AnnounceCactus` | `cfg.announce.timing == AFTER_TURN`, `P == previousPlayerId`, `P` active, no announcer yet | **unchanged** — the current player keeps their turn | `CactusAnnounced` |
 | `TURN_END` | `EndTurn` | `P == C` | `TURN_START`, or `REVEAL` if round-over | `TurnEnded`, `FinalLapAdvanced`?, `TurnStarted` \| `RoundRevealed` |
 | `TURN_END` | `Timeout` | token fresh, window `cfg.timing.endOfTurnWindowMs` | as `EndTurn` | same |
-| **in-round\*** | `Snap` | see [07](07-snap.md) | unchanged, or `AWAIT_SNAP_GIVE`, or `REVEAL` | `SnapSucceeded` \| `SnapFailed`, `SlotEmptied`?, `PenaltyCardTaken`? |
+| **in-round\*** | `Snap` | see [07](07-snap.md) | unchanged, or `AWAIT_SNAP_GIVE`, or `REVEAL`, or a `POWER_*` when `cfg.powers.onHandDiscard` | `SnapSucceeded` \| `SnapFailed`, `SlotEmptied`?, `PenaltyCardTaken`?, `PowerStarted`? |
 | `AWAIT_SNAP_GIVE` | `SnapGive` | P is the snapper, slot own and non-`EMPTY` | the phase that was current before the snap | `CardGiven` |
 | `AWAIT_SNAP_GIVE` | `Timeout` | token fresh | previous phase | `CardGiven` (first legal slot) |
 | `REVEAL` | *(none — engine-driven)* | — | `ROUND_END` | `RoundScored` |
@@ -131,9 +135,10 @@ all `POWER_*`, `TURN_END`. Snap is **not** legal in `LOBBY`, `DEALING`,
 `INITIAL_PEEK`, `REVEAL`, `ROUND_END`, `MATCH_END`, and is disabled entirely when
 `cfg.snap.enabled == false`.
 
-**Snap and the late announcement are the only two actions a player may take while
-it is not their turn**, and they are the only two rows above whose guard is not
-`P == C`. Both leave the phase alone.
+**Snap, the late announcement and a power a snap earned are the actions a player
+may take while it is not their turn** — the rows above whose guard is not `P == C`.
+The first two leave the phase alone. The third does not: it takes the phase, and
+`resumePhase` gives it back, which is the same bargain `AWAIT_SNAP_GIVE` strikes.
 
 ### Action coverage
 
@@ -155,8 +160,8 @@ list):
 | `TURN_START` | `heldCard == null`, `pendingPower == null` |
 | `AWAIT_HELD_DECISION` | `heldCard != null`, `pendingPower == null` |
 | `AWAIT_SLOT_FOR_DISCARD` | `heldCard != null` (it came off the discard), `pendingPower == null` |
-| `POWER_*` | `pendingPower != null`, `heldCard == null` |
-| `AWAIT_SNAP_GIVE` | `pendingSnapGive != null` and names the snapper and the victim |
+| `POWER_*` | `pendingPower != null`; `heldCard == null` unless `resumePhase` says the interrupted phase was holding one |
+| `AWAIT_SNAP_GIVE` | `pendingSnapGive != null` and names the snapper and the victim; `resumePhase != null` |
 | `TURN_END` | `heldCard == null`, `pendingPower == null` |
 | `REVEAL` | every player's `roundScore == null` on entry, non-null on exit |
 | `MATCH_END` | no further action changes state except `LobbyLeave` |

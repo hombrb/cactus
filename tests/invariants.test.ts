@@ -69,12 +69,24 @@ describe("invariant sweep over seeded random games", () => {
     powers: { ...standard.powers, map: { "7": "PEEK_OWN", J: "PEEK_OPPONENT" } },
   };
 
+  // The variant that fires a power on a card leaving its owner's layout. It is
+  // the one rule that parks a power on top of somebody else's phase, so it is
+  // also the one that can strand `resumePhase` or a held card — which is exactly
+  // what this sweep is for. 3p so a snap can land in a turn that is not the
+  // snapper's neighbour's either.
+  const handPowers: RuleConfig = {
+    ...standard,
+    powers: { ...standard.powers, onHandDiscard: true },
+  };
+
   const configs: [string, RuleConfig, number][] = [
     ["standard 3p", standard, 3],
     ["standard 4p", standard, 4],
     ["school 2p", school, 2],
     ["table2p", table2p, 2],
     ["custom 7/J, no seed, stock only 2p", custom, 2],
+    ["powers on a hand discard 2p", handPowers, 2],
+    ["powers on a hand discard 3p", handPowers, 3],
   ];
 
   for (const [label, cfg, players] of configs) {
