@@ -32,7 +32,16 @@ partagé elle reste dans la rangée tout au bord, celle qu'une main peut couvrir
 Le tour passe tout seul une fois que tu as joué — pas de bouton « Terminer ». Tu
 peux dire **Cactus** après avoir joué, et encore pendant que l'autre joue, tant
 qu'il n'a pas fini son tour. Réglages → *Fin de tour automatique* pour revenir à
-la version stricte.
+la version stricte. Quand quelqu'un dit Cactus, ça s'affiche en grand sur la
+moitié de l'autre joueur.
+
+Par défaut un pouvoir ne s'active que sur une carte **piochée puis défaussée** :
+c'est la règle sur laquelle toutes les sources s'accordent, et l'équilibre du jeu
+en dépend. Beaucoup de tables jouent autrement, alors Réglages → *Pouvoirs sur tes
+cartes* fait aussi déclencher son pouvoir à une carte **de ton jeu** qui part à la
+défausse — celle qu'un échange remplace, et celle que tu envoies en défausse
+rapide. L'hôte d'une partie en ligne impose son choix à la table, et le salon
+l'affiche.
 
 ## Développement
 

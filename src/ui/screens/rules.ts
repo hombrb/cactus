@@ -72,8 +72,14 @@ export function renderRules(root: HTMLElement, cfg: RuleConfig, onBack: () => vo
           <ul>${describeTurn(cfg)
             .map((t) => `<li>${t}</li>`)
             .join("")}</ul>
-          <p class="callout">Un pouvoir ne s'active que sur une carte <b>piochée puis défaussée</b>.
-             Utiliser une carte pour sa valeur ou pour son pouvoir : il faut choisir.</p>
+          <p class="callout">${
+            cfg.powers.onHandDiscard
+              ? `Un pouvoir s'active sur une carte <b>piochée puis défaussée</b>, et aussi sur
+                 une carte <b>de ton jeu qui part à la défausse</b>. La carte que tu gardes,
+                 elle, ne fait rien.`
+              : `Un pouvoir ne s'active que sur une carte <b>piochée puis défaussée</b>.
+                 Utiliser une carte pour sa valeur ou pour son pouvoir : il faut choisir.`
+          }</p>
         </section>
 
         <section>

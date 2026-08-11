@@ -115,6 +115,7 @@ export function summarisePowers(cfg: RuleConfig): string {
 export function summariseRules(cfg: RuleConfig): string[] {
   const chips = [`Pouvoirs : ${summarisePowers(cfg)}`];
   chips.push(cfg.snap.enabled ? "Défausse rapide" : "Sans défausse rapide");
+  if (cfg.powers.onHandDiscard) chips.push("Pouvoirs sur tes cartes");
   if (!cfg.deck.seedDiscard) chips.push("Défausse vide au départ");
   if (!cfg.turn.takeFromDiscard) chips.push("Pioche seulement");
   chips.push(
@@ -154,6 +155,11 @@ export function describeTurn(cfg: RuleConfig): string[] {
   if (cfg.turn.takeFromDiscard) {
     bullets.push(
       "<b>Prendre la défausse</b>, et l'échanger obligatoirement contre une de tes cartes. Aucun pouvoir.",
+    );
+  }
+  if (cfg.powers.onHandDiscard) {
+    bullets.push(
+      "Ici, une carte <b>de ton jeu</b> qui part à la défausse déclenche aussi son pouvoir : celle qu'un échange remplace, et celle que tu envoies en défausse rapide.",
     );
   }
   return bullets;

@@ -40,6 +40,9 @@
 .rotor {
   height: 100%;
   min-height: 0;
+  /* For `.shout`, which covers the half. The bottom half has no transform to
+     make it a containing block, so it has to be said. */
+  position: relative;
   display: grid;
   /* In the player's own reading direction: plate, then the cards, then the tray
      hard against their own edge. The tray is the private row — a card revealed
@@ -129,6 +132,94 @@
 
 .half[data-active="true"] .plate__name {
   color: var(--accent);
+}
+
+/* --- the shout ---------------------------------------------------------
+   "CACTUS !" across the half of everyone who did not say it.
+
+   Absolutely positioned, so it is out of flow and cannot land in one of the
+   rotor's explicit grid rows — the failure the comment above `.rotor > .plate`
+   describes. Inside the rotor rather than over the whole board, so the flat
+   table shows it the right way up to the player it is aimed at.
+
+   `overflow: hidden` on the box itself, not on an ancestor: it is the whole
+   guarantee that a long name or a wide glyph cannot push the page into a scroll,
+   which scripts/shots.mjs fails the build over. */
+
+.shout {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  overflow: hidden;
+  /* The cards underneath keep every gesture: a snap is still legal while this is
+     on screen, and the announcement must not eat the tap. */
+  pointer-events: none;
+  text-align: center;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(12, 44, 32, 0.82) 0%,
+    rgba(12, 44, 32, 0.62) 55%,
+    rgba(12, 44, 32, 0) 100%
+  );
+}
+
+.shout[data-on="0"] {
+  display: none;
+}
+
+.shout b {
+  font-size: clamp(34px, 13vw, 76px);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--accent);
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.35),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.shout small {
+  font-size: clamp(12px, 3.6vw, 16px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--on-felt-dim);
+}
+
+.shout[data-on="1"] b {
+  animation: shout-in var(--slow) var(--ease) backwards;
+}
+
+.shout[data-on="1"] small {
+  animation: shout-in var(--slow) var(--ease) 60ms backwards;
+}
+
+@keyframes shout-in {
+  0% {
+    transform: scale(0.55) rotate(-6deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08) rotate(1.5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* The words are the point; the pounce is not. Same reasoning as
+   `.card[data-swapped]`: what reduced motion removes is the movement, never the
+   information. */
+@media (prefers-reduced-motion: reduce) {
+  .shout[data-on="1"] b,
+  .shout[data-on="1"] small {
+    animation: none;
+  }
 }
 
 /* --- plate ------------------------------------------------------------- */

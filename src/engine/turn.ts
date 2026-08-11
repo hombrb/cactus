@@ -3,7 +3,7 @@
 import { buildDeck, cardTable, powerFor } from "./cards";
 import { validateConfig } from "./config";
 import { canRefillStock, ensureStock } from "./deck";
-import { phaseForPower } from "./powers";
+import { beginPower } from "./powers";
 import { shuffle } from "./rng";
 import { beginReveal, roundOverReason } from "./scoring";
 import {
@@ -353,20 +353,29 @@ export function onPlaceInSlot(
   }
   state = { ...state, heldCard: null, phase: "TURN_END" };
 
-  // No power triggers on a swap — neither the incoming card's nor the outgoing
-  // card's. Powers are the price of not using a card's value.
-  return {
-    state,
-    events: [
-      {
-        type: "CardPlaced",
-        playerId: a.playerId,
-        slot: a.slot,
-        placedCardId: incoming,
-        discardedCardId: outgoing,
-      },
-    ],
-  };
+  const events: Event[] = [
+    {
+      type: "CardPlaced",
+      playerId: a.playerId,
+      slot: a.slot,
+      placedCardId: incoming,
+      discardedCardId: outgoing,
+    },
+  ];
+
+  // The incoming card never has a power here — that is the whole balance of the
+  // game, and it holds in every ruleset: a power is the price of not using a
+  // card's value (docs/01 §4). The card the swap *displaces* is a different
+  // question, and `powers.onHandDiscard` is where it is answered (docs/06 §10):
+  // off, nothing fires; on, the displaced card fires its own power for the
+  // player whose layout it just left. Its owner is mid-turn, so there is no
+  // phase to resume — `clearPower` lands on `TURN_END` exactly as before.
+  if (outgoing !== null && s.config.powers.onHandDiscard) {
+    const started = beginPower(state, a.playerId, outgoing, null);
+    if (started) return { state: started.state, events: [...events, ...started.events] };
+  }
+
+  return { state, events };
 }
 
 export function validateDiscardHeld(s: GameState, a: Action & { type: "DiscardHeld" }): Verdict {
@@ -384,7 +393,7 @@ export function onDiscardHeld(
   const cardId = s.heldCard!;
   const power = powerFor(s.config, cardOf(s, cardId));
 
-  let state: GameState = {
+  const state: GameState = {
     ...s,
     discard: [cardId, ...s.discard],
     discardVersion: s.discardVersion + 1,
@@ -395,21 +404,10 @@ export function onDiscardHeld(
     { type: "HeldDiscarded", playerId: a.playerId, cardId, power },
   ];
 
-  if (power === "NONE") return { state: { ...state, phase: "TURN_END" }, events };
-
-  state = {
-    ...state,
-    pendingPower: {
-      kind: power,
-      sourceCard: cardId,
-      ownerId: a.playerId,
-      targets: [],
-      revealed: [],
-    },
-    phase: phaseForPower(power),
-  };
-  events.push({ type: "PowerStarted", playerId: a.playerId, kind: power });
-  return { state, events };
+  // It is this player's own turn, so there is no phase to come back to.
+  const started = beginPower(state, a.playerId, cardId, null);
+  if (!started) return { state: { ...state, phase: "TURN_END" }, events };
+  return { state: started.state, events: [...events, ...started.events] };
 }
 
 // ---------------------------------------------------------------------------

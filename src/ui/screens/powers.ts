@@ -68,8 +68,9 @@ export function renderPowers(
       </header>
 
       <p class="field__note">
-        Un pouvoir ne s'active que sur une carte <b>piochée puis défaussée</b>.
-        Touche une ligne pour changer son pouvoir.
+        Un pouvoir s'active sur une carte qui <b>part à la défausse</b>, jamais sur une
+        carte que tu gardes. Lesquelles exactement dépend de Réglages ; l'écran Règles le
+        dit. Touche une ligne pour changer son pouvoir.
       </p>
 
       <section class="field">

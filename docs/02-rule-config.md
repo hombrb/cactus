@@ -96,6 +96,7 @@ is how the `school` preset gets "all Kings are 0").
 | `powers.map` | `Map<RankKey, PowerKind>` | see below | any | `powerFor` (06) |
 | `powers.aceGiveEnabled` | bool | `false` | — | `powerFor` (06) |
 | `powers.misusePenaltyCards` | int | `1` | `0`–`2` | `applyMisusePenalty` (06) |
+| `powers.onHandDiscard` | bool | `false` | — | `onPlaceInSlot` (05), `resolveSuccessfulSnap` (07) |
 
 ```
 enum PowerKind =
@@ -128,6 +129,13 @@ Default `powers.map`:
 
 Any rank absent from the map has `NONE`. `powerFor` resolves colour-qualified
 keys first, then bare rank, then `NONE`.
+
+`onHandDiscard` widens *when* a power fires without touching *which* rank has
+one: on, a card that goes from a layout to the discard fires its own power for
+the player whose layout it left. See [06 §10](06-powers.md#10-powers-on-a-hand-discard--onhanddiscard)
+for the three cases it deliberately does not cover. It is the only rule key read
+outside the group it names, because it is a statement about powers enforced at the
+two places a card leaves a layout.
 
 ### `turn`
 
@@ -289,6 +297,7 @@ are what a host sends when opening a room:
 |---|---|
 | preset | everything below the overrides |
 | powers | `powers.map`, wholesale |
+| powers on a hand discard | `powers.onHandDiscard` |
 | snap | `snap.enabled` |
 | seed discard | `deck.seedDiscard` |
 | take from discard | `turn.takeFromDiscard` |

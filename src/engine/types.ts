@@ -133,6 +133,16 @@ export interface PowerConfig {
   readonly map: PowerMap;
   readonly aceGiveEnabled: boolean;
   readonly misusePenaltyCards: number;
+  /**
+   * A card that leaves your own layout for the discard also fires its power.
+   *
+   * Off is the rule every source agrees on: a power is the price of not using a
+   * card's value (docs/01 §4). On, it covers both ways a card of yours reaches
+   * the discard — the one a swap displaces (`PlaceInSlot`) and the one a
+   * successful *défausse rapide* throws (`Snap`) — and the power belongs to the
+   * player whose layout it left. See docs/06 §10.
+   */
+  readonly onHandDiscard: boolean;
 }
 
 export interface TurnConfig {

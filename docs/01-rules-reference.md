@@ -100,6 +100,15 @@ information channel of "why did they take that card". → `turn.takeFromDiscard`
 > it for its power are mutually exclusive. Every ruleset consulted agrees on this,
 > and it is the balancing mechanism of the whole game.
 
+*Disagreement, not among sources but among tables:* no published account gives a
+power to a card that leaves a layout, and yet players reach for it — the card is
+face up on the discard, it is a 9, and nothing about "it came from my square"
+feels like it should matter. Kept as an explicit variant rather than pretended
+away: `powers.onHandDiscard` fires the power of any card that goes **from a
+layout to the discard**, which is the card a swap displaces (A.1 above) and the
+card a *défausse rapide* throws (§6). The asymmetry above survives it intact —
+what still never has a power is the card you **keep**. Off by default.
+
 ## 5. Powers
 
 | Rank | Effect |
@@ -136,7 +145,9 @@ discard card.
 
 - **Correct.** The card leaves the game. That slot becomes permanently `EMPTY`,
   and your total drops by that card's value. This is the only way to shrink your
-  layout, and it is the fastest route to a very low score.
+  layout, and it is the fastest route to a very low score. No power fires — the
+  card was not drawn and discarded (§4) — unless `powers.onHandDiscard` is on,
+  in which case it does, and out of turn, since a snap is not a turn.
 - **Wrong.** The card goes back **face down into the same slot** — and you take a
   **face-down penalty card** into a new slot. A failed snap therefore costs you
   twice: you have revealed a card to the table, and you have grown your hand.
@@ -254,6 +265,7 @@ exists here, the key must exist there, and vice versa.
 | 28 | Stock exhausted | reshuffle discard except top | round ends immediately | `deck.reshuffleDiscard` |
 | 29 | Card turned up at the deal | yes | no, the discard starts empty | `deck.seedDiscard` |
 | 30 | Taking the top of the discard | allowed | stock only | `turn.takeFromDiscard` |
+| 31 | A card leaving your layout for the discard | no power | fires its own power, for you | `powers.onHandDiscard` |
 
 ---
 

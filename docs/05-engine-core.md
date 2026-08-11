@@ -314,14 +314,25 @@ fn onPlaceInSlot(state, action) -> (GameState, Event[])
                  discardVersion: s.discardVersion + 1 }
 
   s = s with { heldCard: null, phase: TURN_END }
-  return (s, [ CardPlaced { action.playerId, action.slot,
-                            placedCardId: incoming, discardedCardId: outgoing } ])
+  events = [ CardPlaced { action.playerId, action.slot,
+                          placedCardId: incoming, discardedCardId: outgoing } ]
+
+  // The displaced card is on the discard now, so under this rule it fires its own
+  // power (06 §10). Its owner is mid-turn: nothing to resume, so `clearPower`
+  // still lands on TURN_END.
+  if outgoing != EMPTY and state.config.powers.onHandDiscard:
+    started = beginPower(s, action.playerId, outgoing, resumePhase: null)
+    if started != null: return (started.state, events + started.events)
+
+  return (s, events)
 ```
 
 Three rules the code encodes:
 
-1. **No power triggers on a swap** — neither the incoming card's nor the outgoing
-   card's. Powers are the price you pay for not using the card's value.
+1. **No power triggers for the card you keep** — the incoming one, ever, whatever
+   `powers.onHandDiscard` says. Powers are the price you pay for not using the
+   card's value. Whether the *outgoing* card fires one is that key's business, and
+   only that key's (01 §4, matrix row 31).
 2. **`knownBy` is reset to `{placer}`.** The placer knows the new card; any
    opponent who had memorised the old one now holds stale information, and the
    engine must not pretend otherwise.
@@ -349,14 +360,11 @@ fn onDiscardHeld(state, action) -> (GameState, Event[])
 
   events = [ HeldDiscarded { action.playerId, cardId, power } ]
 
-  if power == NONE:
+  // It is this player's own turn, so there is no phase to come back to (06 §10).
+  started = beginPower(s, action.playerId, cardId, resumePhase: null)
+  if started == null:
     return (s with { phase: TURN_END }, events)
-
-  s = s with { pendingPower: PendingPower { kind: power, sourceCard: cardId,
-                                            ownerId: action.playerId,
-                                            targets: [], revealed: [] },
-               phase: phaseForPower(power) }
-  return (s, events + [ PowerStarted { action.playerId, kind: power } ])
+  return (started.state, events + started.events)
 ```
 
 `HeldDiscarded` is fully public, including the card id — it is face up on the pile
@@ -478,7 +486,10 @@ fn onTimeout(state, action) -> (GameState, Event[])
     AWAIT_HELD_DECISION    -> reduce(state, DiscardHeld { currentPlayer(state) })
     AWAIT_SLOT_FOR_DISCARD -> reduce(state, PlaceInSlot { currentPlayer(state),
                                                           firstLegalSlot(state) })
-    POWER_*                -> reduce(state, PowerSkip { currentPlayer(state) })
+    // The owner, not the current player: a snap can earn a power out of turn
+    // (06 §10), and skipping it as the current player earns NOT_YOUR_POWER and
+    // parks the table in the power phase for good.
+    POWER_*                -> reduce(state, PowerSkip { state.pendingPower.ownerId })
     AWAIT_SNAP_GIVE        -> reduce(state, SnapGive { snapper,
                                                        firstLegalSlot(state) })
     TURN_END               -> reduce(state, EndTurn { currentPlayer(state) })

@@ -78,9 +78,10 @@ too — it is O(deck).
 
 | Invariant | Why |
 |---|---|
-| `heldCard != null` **iff** `phase in {AWAIT_HELD_DECISION, AWAIT_SLOT_FOR_DISCARD}` | A held card outside those phases is a lost card |
+| `heldCard != null` **iff** `resumePhase ?? phase` `in {AWAIT_HELD_DECISION, AWAIT_SLOT_FOR_DISCARD}` | A held card outside those phases is a lost card — but the snap channel can park `AWAIT_SNAP_GIVE`, or a power ([06 §10](06-powers.md)), on top of a turn that is still holding one. `resumePhase` is what names the phase the card really belongs to; read against `phase` alone, every such interruption looks like a loss |
 | `pendingPower != null` **iff** `phase` is a `POWER_*` phase | Prevents an orphaned power surviving into the next turn |
 | `pendingSnapGive != null` **iff** `phase == AWAIT_SNAP_GIVE`, and `resumePhase != null` alongside it | The snap channel must always know where to return |
+| `pendingPower` and `pendingSnapGive` are never both set | They share `resumePhase`, so holding both loses one of the phases owed back. `resolveSuccessfulSnap` fires no power for a snap on somebody else's card, which is what keeps them apart |
 | `lockedSlots` is empty outside `POWER_AWAIT_SWAP_CONFIRM` | A stale lock silently disables snapping |
 | `discardVersion` increments exactly when `discard[0]` changes, and never decreases **within a round** (each deal restarts it at 1) | The whole snap race model rests on this |
 | `rngCursor` never decreases, and changes only inside `nextRandom` | Determinism and replay |

@@ -50,7 +50,7 @@ reducer), **07** (the part everyone gets wrong).
 | **Stock** | The face-down draw pile. |
 | **Discard** | The face-up pile. Only its top card is meaningful for play. |
 | **Held card** | The card a player has drawn from the stock and not yet placed or discarded. Exists only mid-turn. |
-| **Power** | An effect that triggers when a drawn card is discarded *directly* (never when it is swapped in). |
+| **Power** | An effect that triggers when a drawn card is discarded *directly* — and, under `powers.onHandDiscard`, when a card leaves its owner's layout for the discard. Never on the card that is kept. |
 | **Peek** | Being shown a card's face without it changing position. |
 | **Snap** (*défausse rapide*) | Slamming a layout card matching the discard top's rank, out of turn, at any time. |
 | **Announce** | Saying "Cactus" to trigger the end of the round. |

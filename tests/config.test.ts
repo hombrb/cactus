@@ -130,6 +130,29 @@ describe("room settings", () => {
     expect(validateConfig(cfg)).toEqual([]);
   });
 
+  it("carries the host's choice on powers from a hand discard", () => {
+    expect(configForRoom(parseRoomSettings({ powersOnHandDiscard: true })).powers.onHandDiscard)
+      .toBe(true);
+    // Absent, and anything that is not exactly `true`, has to read as the written
+    // rule: this one defaults *off*, so it cannot use the `!== false` shape the
+    // other room settings do.
+    for (const raw of [{}, { powersOnHandDiscard: false }, { powersOnHandDiscard: "yes" }]) {
+      expect(configForRoom(parseRoomSettings(raw)).powers.onHandDiscard).toBe(false);
+    }
+    expect(validateConfig(configForRoom(parseRoomSettings({ powersOnHandDiscard: true }))))
+      .toEqual([]);
+  });
+
+  it("carries it alongside a custom power map, which replaces only the map", () => {
+    // `withPowerMap` rebuilds `powers` wholesale, so a map and this flag arriving
+    // together is the case where one could silently drop the other.
+    const cfg = configForRoom(
+      parseRoomSettings({ powers: { "7": "PEEK_OWN" }, powersOnHandDiscard: true }),
+    );
+    expect(cfg.powers.map).toEqual({ "7": "PEEK_OWN" });
+    expect(cfg.powers.onHandDiscard).toBe(true);
+  });
+
   it("keeps the room's timings, unlike the flat table", () => {
     expect(configForRoom(defaultRoomSettings).timing.turnTimeoutMs).toBe(
       standard.timing.turnTimeoutMs,

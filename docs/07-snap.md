@@ -124,6 +124,16 @@ fn resolveSuccessfulSnap(state, action, card) -> (GameState, Event[])
     (s, revealEvents) = beginReveal(s, reason: LAYOUT_EMPTIED)      // 08
     return (s, events + revealEvents)
 
+  // The card left this player's own layout for the discard, so under this rule it
+  // fires its power — theirs, and out of turn (06 §10). Deliberately after both
+  // returns above, and skipped when anything is already pending: `resumePhase`
+  // holds one phase, and taking it would overwrite somebody else's power.
+  // `s.phase` is untouched here, which is exactly what `clearPower` puts back.
+  if cfg.powers.onHandDiscard
+     and state.pendingPower == null and state.pendingSnapGive == null:
+    started = beginPower(s, action.playerId, card.id, resumePhase: s.phase)
+    if started != null: return (started.state, events + started.events)
+
   return (s, events)                    // phase unchanged: the turn carries on
 ```
 
@@ -135,7 +145,11 @@ Points that matter:
 - **`SnapSucceeded` is fully public, card id included** — it is face up on the pile
   now. This is the main way information enters the table.
 - **The phase is untouched.** A snap that lands while the current player is holding
-  a drawn card leaves them holding it. Snap is not a turn.
+  a drawn card leaves them holding it. Snap is not a turn. The two exceptions both
+  borrow the phase and give it back through `resumePhase`: a snap on somebody
+  else's card (above) and, under `cfg.powers.onHandDiscard`, the power the snapped
+  card fires ([06 §10](06-powers.md#10-powers-on-a-hand-discard--onhanddiscard)).
+  The drawn card is still in its holder's hand throughout either.
 - **The successful snap bumps `discardVersion`**, opening a *new* window on the
   same rank. Chained snaps ("three 7s go out in a second") fall out of this for
   free, and each one is a fresh, fair race.

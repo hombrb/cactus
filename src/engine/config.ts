@@ -36,6 +36,7 @@ export const standard: RuleConfig = {
     },
     aceGiveEnabled: false,
     misusePenaltyCards: 1,
+    onHandDiscard: false,
   },
   turn: {
     takeFromDiscard: true,
@@ -83,7 +84,12 @@ export const standard: RuleConfig = {
 export const school: RuleConfig = {
   ...standard,
   values: { ...standard.values, redKing: 0, blackKing: 0, queen: 10, jack: 10 },
-  powers: { map: { "8": "PEEK_OWN" }, aceGiveEnabled: false, misusePenaltyCards: 1 },
+  powers: {
+    map: { "8": "PEEK_OWN" },
+    aceGiveEnabled: false,
+    misusePenaltyCards: 1,
+    onHandDiscard: false,
+  },
   announce: { ...standard.announce, requiresThreshold: 5 },
   scoring: { ...standard.scoring, tieCountsAsFailure: false },
   match: { scoreLimit: null, roundLimit: 5, limitEliminates: false },

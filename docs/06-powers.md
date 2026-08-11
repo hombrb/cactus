@@ -4,10 +4,16 @@ Resolution of the card powers. Which rank has which power is
 `cfg.powers.map` ([02](02-rule-config.md)); the values below are the `standard`
 preset.
 
-**A power fires if and only if a card drawn from the stock is discarded directly**
-([01 §4](01-rules-reference.md#4-turn-structure)). Never on a swap, never on a
-card taken from the discard, never on the round's seed card, never on a card that
-reaches the discard by being snapped.
+**By default, a power fires if and only if a card drawn from the stock is
+discarded directly** ([01 §4](01-rules-reference.md#4-turn-structure)). Never on a
+swap, never on a card taken from the discard, never on the round's seed card,
+never on a card that reaches the discard by being snapped.
+
+`cfg.powers.onHandDiscard` is the one variant that changes that sentence, and it
+changes exactly one clause of it: a card going **from a layout to the discard**
+fires its power too. §10 is the whole of it. Everything from §1 to §9 is written
+against the pending power and not against where it came from, so it holds either
+way.
 
 ---
 
@@ -54,7 +60,6 @@ fn validate(state, PowerTarget { playerId, target }) -> Verdict
   pp = state.pendingPower
   if pp == null:                                  reject "NO_PENDING_POWER"
   if playerId != pp.ownerId:                      reject "NOT_YOUR_POWER"
-  if not isCurrent(state, playerId):              reject "NOT_YOUR_TURN"
   return Ok                     // legality of the *target* is checked in reduce
 
 fn onPowerTarget(state, action) -> (GameState, Event[])
@@ -74,6 +79,13 @@ fn resolvePowerTarget(state, pp) -> (GameState, Event[])
                                                    : askToSwap(state, pp)
     GIVE_CARD               -> finishGive(state, pp)
 ```
+
+> **Ownership, and deliberately not the turn.** A power belongs to whoever earned
+> it, and `pendingPower.ownerId` is the whole test. An earlier draft of this
+> section also rejected `not isCurrent(state, playerId)`, which was redundant while
+> only the drawn card could earn a power — the owner *was* the current player — and
+> is wrong now that a snap can earn one out of turn (§10). Ownership was always the
+> real rule; the turn was a coincidence of the only path that existed.
 
 > **Why target legality is checked in `reduce`, not `validate`.** An illegal target
 > is not a rejected action — it is a **misuse of the power**, which by the rules
@@ -294,8 +306,14 @@ a pure liability of unknown size, which is what makes power misuse expensive.
 
 ```
 fn clearPower(state) -> GameState
-  return state with { pendingPower: null, phase: TURN_END }
+  return state with { pendingPower: null, lockedSlots: [],
+                      phase: state.resumePhase ?? TURN_END, resumePhase: null }
 ```
+
+`resumePhase` is null for every power the drawn card earns, so this is `TURN_END`
+as it has always been. It is set only by §10, where the power interrupted somebody
+else's phase and owes it back — the same field, and the same discipline, that
+`AWAIT_SNAP_GIVE` uses ([07 §5](07-snap.md)).
 
 ## 9. What each power teaches whom
 
@@ -314,3 +332,81 @@ Every "learns" in the actor column corresponds to a `CardRevealed` with
 `toPlayerId = actor`; everything in the other two columns is derivable from the
 public shape of the events. If an implementation can reconstruct more than this
 table allows from the projected stream, projection is leaking.
+
+## 10. Powers on a hand discard — `onHandDiscard`
+
+*(off by default; matrix row 31)*
+
+On, a card that goes **from a layout to the discard** fires its own power, for the
+player whose layout it left. Two places in the engine put a card there, and both
+now ask:
+
+```
+fn beginPower(state, ownerId, cardId, resumePhase: Phase?) -> (GameState, Event[])?
+  kind = powerFor(state.config, cardOf(state, cardId))
+  if kind == NONE: return null                  // caller keeps its own phase
+
+  s = state with { pendingPower: PendingPower { kind, sourceCard: cardId, ownerId,
+                                                targets: [], revealed: [] },
+                   resumePhase: resumePhase,
+                   phase: phaseForPower(kind) }
+  return (s, [ PowerStarted { ownerId, kind } ])
+```
+
+This is the only writer of `pendingPower` — `onDiscardHeld` ([05 §5.5](05-engine-core.md)),
+`onPlaceInSlot` ([05 §5.4](05-engine-core.md)) and `resolveSuccessfulSnap`
+([07 §4.1](07-snap.md#41-success)) all go through it. `resumePhase` is what tells
+the two apart: a swap is its owner's own turn and passes null, a snap passes the
+phase it interrupted.
+
+### The card a swap displaces
+
+`onPlaceInSlot`, after the displaced card is on the discard. The **incoming** card
+still has no power, ever — that is the asymmetry of
+[01 §4](01-rules-reference.md#4-turn-structure) and this variant does not touch
+it. `pendingPower.sourceCard` is therefore the top of the discard here as well,
+which is what `finishGive` (§7) needs.
+
+### The card a snap throws
+
+`resolveSuccessfulSnap`, and this is the case with teeth: **a snap is not a turn**,
+so the power lands on top of a phase belonging to somebody else. Three conditions
+guard it, and the order is the specification:
+
+1. **The snapper's own card only.** A snap on somebody else's card already owes
+   them one and is parked in `AWAIT_SNAP_GIVE`, which holds `resumePhase` itself —
+   and the card was never in the snapper's layout. `resolveSuccessfulSnap` returns
+   on that branch before reaching this one, so it is structural rather than
+   checked.
+2. **The round outliving the snap.** `snap.emptyLayoutEndsRound` also returns
+   first: a layout emptied has ended the round, and there is nothing left to look
+   at.
+3. **No power already pending.** If A discarded a 9 and is choosing a target when
+   B snaps a 7, B's power is **dropped** — the snap still succeeds. Taking it
+   would overwrite `pendingPower` and steal A's. Dropping is chosen over queueing
+   because a queue of interrupts is a second scheduler for a case two players will
+   hit once a year.
+
+Consequences an implementation has to carry, each of which was a real bug before
+it was a sentence:
+
+- **The power's owner is not the current player.** Every dispatch of `PowerSkip`
+  or `PowerTarget` must name `pendingPower.ownerId` — including the automatic one
+  on timeout ([05](05-engine-core.md), `onTimeout`), which named the current
+  player, earned `NOT_YOUR_POWER`, and left the table in the power phase for good.
+  `validate` (§2) already checked ownership rather than the turn, so nothing there
+  changes.
+- **The interrupted player may still be holding a card.** The `heldCard`/phase
+  invariant ([11 §2](11-edge-cases-and-invariants.md)) has to read
+  `resumePhase ?? phase`, or a power taken over `AWAIT_HELD_DECISION` looks like a
+  lost card. The same was already true of `AWAIT_SNAP_GIVE`.
+- **`pendingPower` and `pendingSnapGive` are mutually exclusive**, since they share
+  `resumePhase`. Condition 1 keeps them apart, and 11 §2 asserts it.
+- **The client must ask "who may act", not "whose turn is it".** That is
+  `entitledSeat` in `src/ui/game/targeting.ts`: `pendingPower.ownerId`, then the
+  snapper of a pending give, then the current player.
+
+Nothing in §9 changes: an out-of-turn `PEEK_OPPONENT` teaches exactly what an
+in-turn one does. What is *new* public information is the timing — the table sees
+`SnapSucceeded` followed by `PowerStarted` for the snapper — and that is correct:
+everyone watched the card land face up.

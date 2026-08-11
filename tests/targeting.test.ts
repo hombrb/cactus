@@ -14,8 +14,8 @@ import { standard } from "../src/engine/config";
 import { projectFor } from "../src/engine/project";
 import { applyAction } from "../src/engine/reduce";
 import { nearestSlots } from "../src/engine/turn";
-import type { GameState, PlayerId, PowerKind, Rank } from "../src/engine/types";
-import { actingSeat, targetableBy } from "../src/ui/game/targeting";
+import type { GameState, PlayerId, PowerKind, Rank, RuleConfig } from "../src/engine/types";
+import { actingSeat, entitledSeat, targetableBy } from "../src/ui/game/targeting";
 import { A, B, CALM, firePower, round } from "./helpers";
 
 /** Draws the top of the stock and discards it, which is what fires a power. */
@@ -55,6 +55,35 @@ describe("actingSeat", () => {
     const s = withPowerPending("PEEK_OPPONENT", "9");
     expect(actingSeat(view(s, A), [A])).toBe(A);
     expect(actingSeat(view(s, B), [B])).toBeNull();
+  });
+});
+
+describe("entitledSeat — whose move it is, on nobody's phone in particular", () => {
+  it("is the current player with nothing pending", () => {
+    expect(entitledSeat(view(round(CALM), A))).toBe(A);
+  });
+
+  it("is the power's owner even while somebody else's turn is unfinished", () => {
+    // What the board asks in order to put a prompt and a "Passer" on the right
+    // half. Asked as "is it your turn", the power a snap earns went to the current
+    // player and its owner got nothing (docs/06 §10).
+    const cfg: RuleConfig = { ...standard, powers: { ...standard.powers, onHandDiscard: true } };
+    let s = round(["2S", "3S", "4S", "5S", "9S", "8S", "10S", "QS", "9H", "KH"], cfg);
+    s = applyAction(s, { type: "DrawStock", playerId: A }).state;
+    s = applyAction(s, {
+      type: "Snap",
+      playerId: B,
+      target: at(B, 0),
+      forVersion: s.discardVersion,
+    }).state;
+
+    expect(s.pendingPower?.ownerId).toBe(B);
+    expect(view(s, A).currentPlayer).toBe(A);
+    expect(entitledSeat(view(s, A))).toBe(B);
+    expect(entitledSeat(view(s, B))).toBe(B);
+    // And the seat that owns it is the one allowed to aim it.
+    expect(targetableBy(view(s, B), [B], at(A, 3))).toBe(B);
+    expect(targetableBy(view(s, A), [A], at(A, 3))).toBeNull();
   });
 });
 
