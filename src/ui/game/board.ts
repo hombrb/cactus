@@ -58,6 +58,9 @@ interface HalfRefs {
    * replace — and the row slides left to make space for it.
    */
   readonly held: HTMLElement;
+  /** The "CACTUS !" shout, shown on the halves that did *not* announce it. */
+  readonly shout: HTMLElement;
+  readonly shoutName: HTMLElement;
   slots: HTMLElement[];
   /**
    * One detacher per slot node, in slot order.
@@ -197,6 +200,15 @@ export class Board {
    */
   private swapped = new Set<string>();
   private swapTimer: number | null = null;
+  /**
+   * Who has just said "Cactus", for as long as the shout is on screen.
+   *
+   * In board state for the same reason `swapped` is: the halves are re-patched
+   * from scratch, and the flat table sees the one announcement twice, once per
+   * seat.
+   */
+  private cactusFor: PlayerId | null = null;
+  private cactusTimer: number | null = null;
   private menuOpenFor: PlayerId | null = null;
   private unsubscribe: () => void;
 
@@ -297,6 +309,7 @@ export class Board {
         // has to go the moment it does.
         if (update.events.some((e) => e.type === "RoundRevealed")) this.hideAllGrants();
         this.markSwaps(update.events);
+        this.markCactus(update.events);
       }
       this.resumePendingLooks();
 
@@ -316,6 +329,7 @@ export class Board {
     if (this.autoEndTimer !== null) clearTimeout(this.autoEndTimer);
     if (this.dragTimer !== null) clearTimeout(this.dragTimer);
     if (this.swapTimer !== null) clearTimeout(this.swapTimer);
+    if (this.cactusTimer !== null) clearTimeout(this.cactusTimer);
     for (const half of this.halves) for (const detach of half.detach) detach();
     this.flights.destroy();
     this.root.innerHTML = "";
@@ -362,6 +376,11 @@ export class Board {
         </div>
         <div class="layout"><div class="layout__grid"></div></div>
         <div class="held"></div>
+        <!-- Inside the rotor, so on the flat table the shout is the right way up
+             for the player it is addressed to. Last, so it covers the half. -->
+        <div class="shout" data-on="0" aria-hidden="true">
+          <b>CACTUS !</b><small></small>
+        </div>
       </div>
     `;
 
@@ -388,6 +407,8 @@ export class Board {
       // widths are measured against, so it must stay free of the cards.
       layout: root.querySelector<HTMLElement>(".layout__grid")!,
       held: root.querySelector<HTMLElement>(".held")!,
+      shout: root.querySelector<HTMLElement>(".shout")!,
+      shoutName: root.querySelector<HTMLElement>(".shout small")!,
       slots: [],
       detach: [],
       pressing: null,
@@ -589,6 +610,38 @@ export class Board {
       this.swapped.clear();
       this.patch();
     }, msToken("--mark", 2600));
+  }
+
+  /**
+   * The shout, from the one event that carries it.
+   *
+   * Said out loud at a table, and the app said it in eight characters next to a
+   * name — so on a phone the other player finished their turn without noticing
+   * the round was ending. `announcerId` stays the durable fact (a reconnecting
+   * client gets a view and no events); this is only the moment it happens.
+   *
+   * Read per seat from `update.events` and not from the merged stream, for the
+   * reason `markSwaps` gives: the merged stream is empty when motion is off, and
+   * an announcement is information. Hence also the `cactusFor` guard, which
+   * both dedupes the flat table's two seats and keeps the timer from restarting.
+   */
+  private markCactus(events: readonly Event[]): void {
+    for (const e of events) {
+      if (e.type === "RoundStarted") {
+        this.cactusFor = null;
+        continue;
+      }
+      if (e.type !== "CactusAnnounced") continue;
+      if (this.cactusFor === e.playerId) continue;
+      this.cactusFor = e.playerId;
+
+      if (this.cactusTimer !== null) clearTimeout(this.cactusTimer);
+      this.cactusTimer = window.setTimeout(() => {
+        this.cactusTimer = null;
+        this.cactusFor = null;
+        this.patch();
+      }, msToken("--shout", 1900));
+    }
   }
 
   /** A pending grant on a slot that is not this half's own. */
@@ -845,6 +898,18 @@ export class Board {
       ? `${me.roundScore} · total ${me.cumulativeScore}`
       : `${me.cumulativeScore}`;
     half.stock.textContent = `pioche ${view.stockCount}`;
+
+    // On every half but the announcer's own — which is what "show it to the
+    // opponent" means in both modes, with no mode to test: on the flat table it
+    // lands on the other player's half, the right way up for them; in a room the
+    // only half that reads as yours is yours, so you get it when they say it and
+    // not when you do.
+    const shouting = this.cactusFor !== null && this.cactusFor !== half.playerId;
+    half.shout.dataset.on = shouting ? "1" : "0";
+    if (shouting) {
+      half.shoutName.textContent =
+        view.players.find((p) => p.id === this.cactusFor)?.name ?? "";
+    }
 
     this.patchSlots(half, view, revealAll);
     // Whose turn it is and who may act are two questions, and the tray answers

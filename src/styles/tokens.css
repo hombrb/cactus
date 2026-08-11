@@ -57,6 +57,14 @@
      off is the fade, in card.css. */
   --mark: 2600ms;
 
+  /* How long "CACTUS !" stays on the opponent's half. Read by
+     src/ui/game/board.ts as well as by board.css.
+
+     Not zeroed below either, and for the same reason: the shout is the one
+     notice that the round is ending, so reduced motion drops its animation
+     (board.css) and keeps the words. */
+  --shout: 1900ms;
+
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
 }
