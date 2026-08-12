@@ -253,7 +253,6 @@ h1 {
   flex-wrap: wrap;
   align-items: center;
   gap: 14px;
-  border-left: 3px solid var(--accent);
   margin: 0 0 28px;
 }
 
@@ -272,8 +271,7 @@ h1 {
 .cta--end {
   margin: 40px 0 32px;
   padding: 24px 20px;
-  background: linear-gradient(180deg, var(--accent-soft), rgba(0, 0, 0, 0.24));
-  border-color: rgba(232, 176, 75, 0.35);
+  background: rgba(0, 0, 0, 0.26);
   text-align: center;
 }
 
@@ -446,7 +444,7 @@ h1 {
   margin: 0 0 20px;
   padding: 14px 16px;
   border-radius: 14px;
-  border-left: 3px solid var(--accent);
+  border: 1px solid var(--line);
   background: var(--panel);
 }
 

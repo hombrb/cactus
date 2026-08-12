@@ -2,7 +2,7 @@
 title: Cactus, Dutch, Tamalou, Cabo, Pablo : le même jeu, dix noms
 metaTitle: Cactus, Dutch, Tamalou, Cabo : les variantes comparées
 description: Cactus, Dutch, Tamalou, Cabo, Pablo, Gabo, Marmotte : c'est le même jeu de cartes. Voici ce qui change vraiment d'une version à l'autre, et laquelle choisir.
-lead: Vous y avez joué en colonie sous le nom de **Tamalou**, votre cousin belge l'appelle **Cabo**, Wikipédia dit **Dutch**, et la boîte du commerce dit **Cambio**. C'est le même jeu — mais les différences ne sont pas que de nom.
+lead: Vous y avez joué en colonie sous le nom de **Tamalou**, votre cousin belge l'appelle **Cabo**, Wikipédia dit **Dutch**, et la boîte du commerce dit **Cambio**. C'est le même jeu, mais les différences ne sont pas que de nom.
 published: 2026-05-06
 updated: 2026-08-12
 keywords: cactus dutch, tamalou règles, cabo jeu de cartes, pablo jeu de cartes, jeu de cartes marmotte, cambio
@@ -26,18 +26,18 @@ complètement la façon de jouer une manche.
 
 ## D'où viennent ces noms
 
-- **Cactus** — le nom français le plus répandu aujourd'hui, sans origine
-  documentée. C'est aussi le mot que l'on crie pour arrêter la manche, ce qui
-  explique sa persistance.
-- **Tamalou** — « t'as mal où ? », la blague qui accompagne le jeu depuis les
+- **Cactus**, le nom français le plus répandu aujourd'hui, sans origine documentée.
+  C'est aussi le mot que l'on crie pour arrêter la manche, ce qui explique sa
+  persistance.
+- **Tamalou**, soit « t'as mal où ? », la blague qui accompagne le jeu depuis les
   années 1990 dans les colonies françaises.
-- **Dutch** — le nom retenu par Wikipédia en français, et la description la plus
+- **Dutch**, le nom retenu par Wikipédia en français, et la description la plus
   complète disponible en ligne.
-- **Cabo / Kabo** — surtout en Belgique et en Israël, avec une orthographe qui
+- **Cabo** ou **Kabo**, surtout en Belgique et en Israël, avec une orthographe qui
   varie autant que les règles.
-- **Pablo, Gabo, Marmotte** — variantes régionales du mot d'annonce, mêmes
-  mécaniques.
-- **Cambio** — la version commerciale, vendue en boîte avec ses propres cartes et
+- **Pablo**, **Gabo**, **Marmotte** : variantes régionales du mot d'annonce, pour
+  des mécaniques identiques.
+- **Cambio**, la version commerciale, vendue en boîte avec ses propres cartes et
   ses pouvoirs décalés d'un rang.
 
 Le jeu appartient à la famille du **Golf**, décrite depuis longtemps dans la
@@ -63,9 +63,9 @@ finir.
 | Pénalité de l'annonceur | total × 2 | total + 10, total + 20 |
 | Fin de partie | 100 points cumulés | 200 points, ou nombre de manches fixe |
 
-Les quatre lignes qui comptent vraiment, si vous voulez éviter la dispute de fin de
-manche : **la valeur des rois**, **quelles cartes ont un pouvoir**, **la défausse
-rapide**, et **ce qui arrive à l'annonceur en cas d'égalité**.
+Si vous voulez éviter la dispute de fin de manche, quatre lignes comptent plus que
+les autres : **la valeur des rois**, **quelles cartes ont un pouvoir**, **la
+défausse rapide**, et **ce qui arrive à l'annonceur en cas d'égalité**.
 
 ## Les trois grandes familles
 
@@ -78,42 +78,42 @@ version la plus riche, et celle que suivent
 
 ### La version « cour de récré »
 
-Tous les rois à 0, toutes les figures à 10, le **8** est la seule carte à pouvoir,
+Tous les rois à 0, toutes les figures à 10, le **8** comme seule carte à pouvoir,
 pas de carte retournée au départ, et il faut se croire sous 5 pour annoncer. Elle
-s'apprend en deux minutes et se joue très vite — c'est la bonne version pour
-expliquer le jeu à quelqu'un, pas pour une soirée entière.
+s'apprend en deux minutes et se joue très vite. C'est la bonne version pour
+expliquer le jeu à quelqu'un, moins pour une soirée entière.
 
 ### La version Cambio
 
 La déclinaison commerciale : mêmes quatre cartes, mais les pouvoirs sont décalés
 d'un rang (6/7 pour ses propres cartes, 8/9 pour celles des adversaires, 10/Valet
 pour l'échange aveugle). Si vous avez appris avec la boîte, vos réflexes de pouvoirs
-seront faux sur une table française — c'est la confusion la plus fréquente.
+seront faux sur une table française. C'est la confusion la plus fréquente.
 
 ## Alors, quelle version choisir ?
 
 Pour une première partie : la version cour de récré, cinq minutes d'explication.
 
-Pour jouer régulièrement : la version complète. Le partage roi rouge / roi noir
-crée à lui seul la tension qui fait revenir, et les quatre familles de pouvoirs
-donnent de vraies décisions à chaque tour.
+Pour jouer régulièrement : la version complète. Le partage roi rouge / roi noir crée
+à lui seul la tension qui fait revenir, et les quatre familles de pouvoirs donnent
+de vraies décisions à chaque tour.
 
-Le vrai conseil, lui, ne dépend pas de la version : **mettez-vous d'accord avant de
-distribuer**. Les disputes de Cactus portent toujours sur la même chose — la valeur
+Le vrai conseil ne dépend pas de la version : **mettez-vous d'accord avant de
+distribuer**. Les disputes de Cactus portent toujours sur la même chose, la valeur
 d'un roi que quelqu'un vient de retourner.
 
 > Dans notre application, chacune des lignes du tableau ci-dessus est un réglage.
 > Les pouvoirs se choisissent carte par carte, la défausse rapide s'active ou non,
-> et l'hôte d'une partie en ligne impose ses réglages à toute la table — qui les
-> voit affichés avant de commencer.
+> et l'hôte d'une partie en ligne impose ses réglages à toute la table, qui les voit
+> affichés avant de commencer.
 
 ## Questions fréquentes
 
 ### Quelle est la différence entre le Cactus et le Dutch ?
 
 Aucune, ce sont deux noms du même jeu. « Dutch » est le nom retenu par Wikipédia en
-français, « Cactus » celui qu'emploient la plupart des joueurs francophones — et le
-mot que l'on crie pour terminer la manche.
+français, « Cactus » celui qu'emploient la plupart des joueurs francophones, et
+aussi le mot que l'on crie pour terminer la manche.
 
 ### Le Tamalou et le Cactus, c'est pareil ?
 
@@ -128,8 +128,8 @@ joue souvent avec un seuil pour annoncer et des pouvoirs plus limités.
 ### Cambio, c'est le Cactus vendu en boîte ?
 
 C'est la version commerciale du même jeu, avec ses propres cartes et des pouvoirs
-décalés d'un rang. Les règles de base — quatre cartes, total le plus bas, annonce —
-sont identiques.
+décalés d'un rang. Les règles de base restent identiques : quatre cartes, total le
+plus bas, annonce pour terminer.
 
 ### Quelle version faut-il jouer à deux joueurs ?
 

@@ -117,7 +117,7 @@ function footer(): string {
  */
 function dock(source: string): string {
   return `<div class="dock">
-  <span class="dock__text"><b>${NAME}</b> — gratuit, sans compte</span>
+  <span class="dock__text"><b>${NAME}</b>, gratuit et sans compte</span>
   <a class="btn btn--accent" href="${playHref(source)}">Jouer</a>
 </div>`;
 }
@@ -128,8 +128,8 @@ function ctaBlock(source: string, heading: string, pitch: string): string {
   <p>${escapeHtml(pitch)}</p>
   <ul class="cta__points">
     <li>À deux sur un seul téléphone, posé à plat entre les joueurs</li>
-    <li>Ou à distance : un code de salon à six caractères, et c'est parti</li>
-    <li>Les règles au choix — pouvoirs, défausse rapide, seuil de points</li>
+    <li>Ou à distance, avec un code de salon à six caractères</li>
+    <li>Les pouvoirs, la défausse rapide et le seuil de points se règlent avant la partie</li>
     <li>Gratuit, sans compte, sans publicité, et jouable hors ligne</li>
   </ul>
   <a class="btn btn--accent btn--big" href="${playHref(source)}">Ouvrir le jeu</a>
@@ -300,7 +300,7 @@ ${crumbs(article.title)}
   <p class="lead">${renderInline(article.lead)}</p>
 
   <aside class="cta cta--inline">
-    <p><b>Le jeu se joue tout de suite</b>, dans le navigateur : gratuit, sans compte, à deux sur un téléphone.</p>
+    <p><b>Le jeu s'ouvre dans le navigateur</b>, sans compte et sans installation.</p>
     <a class="btn btn--accent" href="${playHref(article.slug)}">Jouer au Cactus</a>
   </aside>
 
@@ -310,7 +310,7 @@ ${toc(article)}
 ${article.html}
   </div>
 
-${ctaBlock(article.slug, "Une manche, maintenant ?", "Le Cactus se comprend en le jouant : le téléphone se pose à plat entre vous deux, chacun voit sa moitié à l'endroit, et la première manche dure cinq minutes.")}
+${ctaBlock(article.slug, "Une manche, maintenant ?", "Le Cactus se comprend surtout en le jouant. Posez le téléphone à plat entre vous deux : chacun voit sa moitié à l'endroit, et la manche dure cinq minutes.")}
 
 ${relatedBlock(article, all)}
 </article>`;
@@ -350,7 +350,7 @@ export function renderIndexPage(articles: readonly Article[], site: Site): strin
       "@type": "Blog",
       name: `Le blog du ${NAME}`,
       description:
-        "Les règles, les variantes et la stratégie du jeu de cartes Cactus — et le jeu, jouable tout de suite.",
+        "Les règles et les variantes du jeu de cartes Cactus, par l'application qui permet d'y jouer.",
       url: canonical,
       inLanguage: "fr-FR",
       publisher: publisher(site),
@@ -377,10 +377,10 @@ export function renderIndexPage(articles: readonly Article[], site: Site): strin
     <a href="/">Accueil</a><span aria-hidden="true">›</span><span aria-current="page">Blog</span>
   </nav>
   <h1>Le blog du Cactus</h1>
-  <p class="lead">Les règles complètes, les variantes qui changent d'une table à l'autre, et ce qu'il faut vraiment savoir pour gagner. Le jeu, lui, est à un clic.</p>
+  <p class="lead">Les règles complètes du Cactus, les variantes qui changent d'une table à l'autre, et ce qu'il faut savoir pour gagner. Le jeu, lui, est à un clic.</p>
 
   <aside class="cta cta--inline">
-    <p><b>Le jeu est là</b>, gratuit et sans compte — à deux sur un téléphone, ou à distance.</p>
+    <p><b>Le jeu est là</b>, gratuit et sans compte, à deux sur un téléphone ou à distance.</p>
     <a class="btn btn--accent" href="${playHref("blog-index")}">Jouer au Cactus</a>
   </aside>
 
@@ -388,14 +388,14 @@ export function renderIndexPage(articles: readonly Article[], site: Site): strin
     ${cards}
   </ul>
 
-${ctaBlock("blog-index", "Le jeu, tout de suite", "Toutes les variantes décrites ici sont des réglages dans l'application : pouvoirs, défausse rapide, seuil de points, tout se change avant la partie.")}
+${ctaBlock("blog-index", "Le jeu, tout de suite", "Les variantes décrites ici sont des réglages dans l'application. Tout se choisit avant la partie, et l'hôte impose les siens à la table.")}
 </div>`;
 
   return layout(
     {
-      title: "Blog du Cactus — règles, variantes et stratégie du jeu de cartes",
+      title: "Blog du Cactus : règles, variantes et stratégie",
       description:
-        "Règles du Cactus, variantes (Dutch, Tamalou, Cabo, Pablo), stratégie et conseils — par l'application gratuite qui permet d'y jouer à deux sur un téléphone.",
+        "Les règles du Cactus, ses variantes (Dutch, Tamalou, Cabo, Pablo) et la stratégie, par l'application gratuite qui permet d'y jouer à deux sur un téléphone.",
       canonical,
       type: "website",
       structured: jsonLd({ "@context": "https://schema.org", "@graph": graph }),
