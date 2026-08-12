@@ -12,7 +12,13 @@ import { describe, expect, it } from "vitest";
 import { buildBlog, siteUrl, type SourceFile } from "../src/blog/build";
 import { extractFaq, formatDate, parseArticle, parseFrontMatter } from "../src/blog/content";
 import { renderInline, renderMarkdown, slugify } from "../src/blog/markdown";
-import { renderArticlePage, renderSitemap, type Site } from "../src/blog/page";
+import {
+  PRODUCTION_URL,
+  renderArticlePage,
+  renderRobots,
+  renderSitemap,
+  type Site,
+} from "../src/blog/page";
 
 const SITE: Site = { url: "https://example.test", css: "/*css*/" };
 
@@ -203,6 +209,28 @@ describe("pages", () => {
   it("falls back to the default origin, and never keeps a trailing slash", () => {
     expect(siteUrl("https://cactus.example/")).toBe("https://cactus.example");
     expect(siteUrl(undefined)).toMatch(/^https:\/\/[^/]+$/);
+  });
+
+  it("asks to be indexed only from the public domain", () => {
+    const at = (url: string) => {
+      const site: Site = { url, css: "" };
+      return {
+        page: renderArticlePage(parseArticle("a.md", article()), [], site),
+        robots: renderRobots(site),
+      };
+    };
+
+    const production = at(PRODUCTION_URL);
+    expect(production.page).toContain('<meta name="robots" content="index, follow');
+    expect(production.robots).toContain("Allow: /");
+    expect(production.robots).toContain(`Sitemap: ${PRODUCTION_URL}/sitemap.xml`);
+
+    // The workers.dev deploy serves the same articles at another address; left
+    // indexable, it would compete with the real site for its own keywords.
+    const development = at("https://cactus.goats-wiser-9h.workers.dev");
+    expect(development.page).toContain('<meta name="robots" content="noindex, nofollow"');
+    expect(development.robots).toContain("Disallow: /");
+    expect(development.robots).not.toContain("Sitemap:");
   });
 });
 

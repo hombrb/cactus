@@ -69,12 +69,24 @@ Une section `## Questions fréquentes` dont les `###` sont des questions devient
 automatiquement un bloc **FAQPage** dans les données structurées : la page que lit
 un visiteur et celle que lit Google ne peuvent pas diverger, il n'y a qu'une copie.
 
+### Le domaine, et qui a le droit d'être indexé
+
 Les URL absolues (canonical, sitemap, partages) ont besoin de savoir où le site est
-déployé. Par défaut c'est le sous-domaine `workers.dev` ; pour un vrai domaine :
+déployé. Par défaut c'est le sous-domaine de développement
+`cactus.goats-wiser-9h.workers.dev` ; le site public est **`playcactus.co`** :
 
 ```bash
-SITE_URL=https://exemple.fr npm run build
+SITE_URL=https://playcactus.co npm run build   # le build à mettre en ligne
+npm run build                                  # le build de dev, en noindex
 ```
+
+**Seul le build fait pour `playcactus.co` demande à être indexé.** Tout autre
+origine — le sous-domaine `workers.dev`, une préversion, un fork — sort en
+`noindex, nofollow` avec un `robots.txt` en `Disallow: /`. C'est délibéré : les
+mêmes articles accessibles à deux adresses, c'est un site qui se fait concurrence
+à lui-même sur ses propres mots-clés. Le jour où `playcactus.co` est en ligne, il
+suffit de mettre `SITE_URL` dans la commande de déploiement — et de ne soumettre
+le sitemap à la Search Console qu'à ce moment-là.
 
 `npm run check:blog` relit le `dist/` produit et vérifie ce que les pages
 promettent : canonical cohérent, titres et descriptions à la bonne longueur,

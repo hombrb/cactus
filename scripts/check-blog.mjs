@@ -47,10 +47,28 @@ check(pages.length >= 2, "an index and at least one article were built");
 
 const robots = readFileSync(join(DIST, "robots.txt"), "utf8");
 const sitemap = readFileSync(join(DIST, "sitemap.xml"), "utf8");
-const origin = (/Sitemap: (https?:\/\/[^/]+)\//.exec(robots) ?? [])[1];
+const origin = (/<loc>(https?:\/\/[^/]+)\//.exec(sitemap) ?? [])[1];
 
-check(Boolean(origin), "robots.txt names the sitemap on an absolute origin");
+check(Boolean(origin), "the sitemap gives the site an absolute origin");
 check(/^https:\/\//.test(origin ?? ""), "the site origin is https");
+
+// A build for anything but the public domain must not ask to be indexed: two
+// copies of the same articles at two addresses is how a site competes with
+// itself. robots.txt and the pages have to say the same thing about it.
+const indexable = readFileSync(join(DIST, "blog/index.html"), "utf8").includes(
+  '<meta name="robots" content="index',
+);
+console.log(`\norigin: ${origin} — ${indexable ? "indexable" : "noindex (development)"}`);
+check(
+  indexable ? robots.includes("Allow: /") : robots.includes("Disallow: /"),
+  "robots.txt agrees with the pages about being indexed",
+);
+check(
+  indexable === readFileSync(join(DIST, "index.html"), "utf8").includes(
+    '<meta name="robots" content="index',
+  ),
+  "the app page and the blog agree about being indexed",
+);
 
 // --- each page ------------------------------------------------------------
 

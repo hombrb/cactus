@@ -17,13 +17,18 @@ import {
 /**
  * Where the pages think they live.
  *
- * The app is deployed by hand to a workers.dev subdomain for now (HANDOVER §7);
- * when a real domain lands, `SITE_URL=https://… npm run build` is the only
- * change needed. It matters more than it looks: canonicals and the sitemap are
- * absolute URLs, and pointing them at the wrong origin is worse than having no
- * sitemap at all.
+ * The default is the workers.dev subdomain the app is deployed to today; the
+ * public site will be `PRODUCTION_URL` (src/blog/page.ts), and getting there is
+ * one environment variable:
+ *
+ *   SITE_URL=https://playcactus.co npm run build
+ *
+ * It matters more than it looks. Canonicals and the sitemap are absolute URLs,
+ * so this is the value that decides which address the pages claim to live at —
+ * and, since only the production origin is emitted as indexable, whether they
+ * ask to be indexed at all.
  */
-export const DEFAULT_SITE_URL = "https://cactus.hombrb.workers.dev";
+export const DEFAULT_SITE_URL = "https://cactus.goats-wiser-9h.workers.dev";
 
 export function siteUrl(configured: string | undefined): string {
   const url = (configured ?? "").trim() || DEFAULT_SITE_URL;

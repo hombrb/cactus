@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { defineConfig, type Plugin } from "vitest/config";
 import { buildBlog, siteUrl, type SourceFile } from "./src/blog/build";
-import type { Site } from "./src/blog/page";
+import { isIndexable, type Site } from "./src/blog/page";
 
 const CONTENT_DIR = resolve("content/blog");
 const BLOG_CSS = resolve("src/blog/blog.css");
@@ -78,6 +78,18 @@ function blog(): Plugin {
 
       return [
         { tag: "link", attrs: { rel: "canonical", href: `${url}/` }, injectTo: "head" as const },
+        {
+          // The app's page follows the same rule as the articles: only the
+          // production origin asks to be indexed (src/blog/page.ts).
+          tag: "meta",
+          attrs: {
+            name: "robots",
+            content: isIndexable(url)
+              ? "index, follow, max-image-preview:large"
+              : "noindex, nofollow",
+          },
+          injectTo: "head" as const,
+        },
         {
           tag: "meta",
           attrs: { property: "og:url", content: `${url}/` },
