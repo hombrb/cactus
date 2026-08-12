@@ -88,6 +88,26 @@ ul {
   display: none !important;
 }
 
+/* Only ever shown when scripts are off, over the felt like everything else. */
+.noscript {
+  position: relative;
+  z-index: 1;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 40px 22px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.noscript h1 {
+  font-size: 26px;
+  margin-bottom: 12px;
+}
+
+.noscript a {
+  color: var(--accent);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

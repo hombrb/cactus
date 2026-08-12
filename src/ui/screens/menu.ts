@@ -25,6 +25,14 @@ export function renderMenu(root: HTMLElement, actions: MenuActions): void {
         <button class="btn btn--big" type="button" data-act="settings">Réglages</button>
       </nav>
 
+      <!-- A real link, not a screen: the blog is static HTML served next to the
+           app (see the blog plugin in vite.config.ts). It leaves the SPA on
+           purpose — those pages exist to be indexed and to bring players here,
+           which a client-rendered route could not do. -->
+      <a class="menu__blog" href="/blog/">
+        Blog <span aria-hidden="true">·</span> règles, variantes et stratégie
+      </a>
+
       <p class="hint" data-install hidden>
         Astuce : <b>Partager</b> → <b>Sur l'écran d'accueil</b> pour jouer en plein écran.
       </p>

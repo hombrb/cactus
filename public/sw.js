@@ -45,6 +45,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // The blog belongs to the network, not to the app shell. Without this, a
+  // reader who opened an article would have it cached as "./index.html" — and
+  // the next offline launch of the *game* would show a blog page.
+  if (url.pathname.startsWith("/blog/")) return;
+
   // Navigations: network first so a new deploy wins, cache as the offline
   // fallback. Everything else: cache first.
   if (request.mode === "navigate") {

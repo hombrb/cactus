@@ -2,8 +2,24 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <title>Cactus</title>
-    <meta name="description" content="Le jeu de cartes Cactus, à deux sur un téléphone." />
+    <title>Cactus — le jeu de cartes, à deux sur un téléphone</title>
+    <meta
+      name="description"
+      content="Joue au Cactus (Dutch, Tamalou, Cabo) à deux sur un seul téléphone ou à distance. Gratuit, sans compte, sans publicité, et jouable hors ligne."
+    />
+
+    <!-- The canonical, og:url, og:image and the JSON-LD are injected at build
+         time by the blog plugin (vite.config.ts): they need the deploy origin,
+         which lives in one place — SITE_URL. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Cactus" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:title" content="Cactus — le jeu de cartes, à deux sur un téléphone" />
+    <meta
+      property="og:description"
+      content="Le Cactus à deux sur un seul téléphone, ou à distance avec un code de salon. Gratuit, sans compte, hors ligne."
+    />
+    <meta name="twitter:card" content="summary" />
 
     <!-- viewport-fit=cover lets the board reach under the notch and home indicator;
          padding is restored per-side with env(safe-area-inset-*). The felt
@@ -31,5 +47,23 @@
   </head>
   <body>
     <div id="app"></div>
+
+    <!-- The game is the page, so without scripts the page is empty — including
+         for anything that reads HTML and does not run it. These few lines say
+         what this is, and point at the pages that do have prose. -->
+    <noscript>
+      <div class="noscript">
+        <h1>Cactus — le jeu de cartes</h1>
+        <p>
+          Le Cactus (aussi appelé Dutch, Tamalou, Cabo ou Pablo) se joue à deux sur un seul
+          téléphone posé à plat, ou à distance avec un code de salon. Le jeu a besoin de
+          JavaScript pour tourner ; les règles, elles, se lisent sans.
+        </p>
+        <p>
+          <a href="/blog/regles-du-jeu-de-cactus/">Les règles complètes du Cactus</a> ·
+          <a href="/blog/">tous les articles</a>
+        </p>
+      </div>
+    </noscript>
   </body>
 </html>

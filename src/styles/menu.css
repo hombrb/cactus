@@ -56,6 +56,24 @@
   gap: 10px;
 }
 
+/* Deliberately quieter than the four buttons above it: the blog is a way in for
+   people who arrive from a search engine, not a fifth thing to do here. */
+.menu__blog {
+  display: block;
+  margin-top: -18px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-felt-dim);
+  text-decoration: none;
+  padding: 8px;
+}
+
+.menu__blog span {
+  color: var(--on-felt-faint);
+  margin: 0 2px;
+}
+
 .hint {
   font-size: 12px;
   line-height: 1.5;
