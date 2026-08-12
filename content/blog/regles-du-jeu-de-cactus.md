@@ -1,8 +1,8 @@
 ---
 title: Règles du Cactus : le jeu de cartes expliqué en 5 minutes
-metaTitle: Règles du Cactus — le jeu de cartes expliqué (2026)
-description: Les règles complètes du jeu de cartes Cactus : distribution, valeurs, pouvoirs, défausse rapide, annonce et décompte des points — variantes comprises.
-lead: Le Cactus se joue avec un jeu de 52 cartes, quatre cartes par joueur, et une seule règle à retenir — **finir avec le total le plus bas**. Tout le reste est de la mémoire et du culot. Voici les règles complètes, dans l'ordre où on en a besoin.
+metaTitle: Règles du Cactus : le jeu de cartes expliqué (2026)
+description: Les règles complètes du jeu de cartes Cactus : distribution, valeurs, pouvoirs, défausse rapide, annonce et décompte des points, variantes comprises.
+lead: Le Cactus se joue avec un jeu de 52 cartes, quatre cartes par joueur, et une seule règle à retenir : **finir avec le total le plus bas**. Le reste est affaire de mémoire et de culot. Voici les règles complètes, dans l'ordre où on en a besoin.
 published: 2026-04-14
 updated: 2026-08-12
 keywords: règles cactus, jeu de cartes cactus, comment jouer au cactus, cactus carte règle, dutch jeu de cartes
@@ -12,12 +12,12 @@ related: cactus-dutch-tamalou-cabo-pablo, comment-gagner-au-cactus, jouer-au-cac
 ## Ce qu'il faut pour jouer
 
 Un jeu de **52 cartes**, sans joker. Deux joueurs au minimum, six au maximum autour
-d'une table — au-delà de quatre joueurs, on mélange deux jeux ensemble. Une partie
+d'une table. Au-delà de quatre joueurs, on mélange deux jeux ensemble. Une partie
 complète dure une vingtaine de minutes, une manche seule environ cinq.
 
 Le Cactus appartient à la famille du **Golf** : un jeu à information cachée, où l'on
-cherche le score le plus bas, et où l'essentiel de la difficulté est de se souvenir
-de ses propres cartes.
+cherche le score le plus bas et où l'essentiel de la difficulté consiste à se
+souvenir de ses propres cartes.
 
 ## Le but du jeu
 
@@ -34,11 +34,11 @@ un exercice de mémoire avant d'être un jeu de hasard.
 2. Le reste du paquet forme la **pioche**, au centre. On retourne sa première carte
    pour ouvrir la **défausse**.
 3. Avant le premier tour, chaque joueur regarde **deux de ses cartes, une seule
-   fois** — les deux les plus proches de lui — puis les remet face cachée.
+   fois**, les deux les plus proches de lui, puis les remet face cachée.
 
 > L'ordre des cartes est figé. On ne les mélange pas, on ne les tourne pas, on ne
-> les échange pas de place. C'est précisément ce qui rend la mémoire utile : une
-> carte oubliée est une carte perdue.
+> les échange pas de place. C'est ce qui rend la mémoire utile : une carte oubliée
+> est une carte perdue.
 
 Certaines tables ne retournent aucune carte à la distribution : la défausse commence
 vide et se remplit au premier tour joué. D'autres ne font regarder qu'une seule
@@ -53,17 +53,17 @@ difficulté.
 | Roi noir ♠ ♣ | **13** | 15, 20 |
 | Dame | 12 | 10 |
 | Valet | 11 | 10 |
-| As | 1 | — |
-| 2 à 10 | leur numéro | — |
+| As | 1 | |
+| 2 à 10 | leur numéro | |
 | Joker (si utilisé) | −1 | −2, 0 |
 
 La distinction **roi rouge / roi noir** est la règle la plus caractéristique du
-Cactus. Le roi rouge est la meilleure carte du jeu, le roi noir la pire — et c'est
-le même dos, la même silhouette, le même « roi » quand on l'aperçoit une demi-seconde.
+Cactus. Le roi rouge est la meilleure carte du jeu, le roi noir la pire, et c'est le
+même dos, la même silhouette, le même « roi » quand on l'aperçoit une demi-seconde.
 Garder un roi sans savoir sa couleur est le pari le plus cher du jeu.
 
 La version « cour de récréation » simplifie tout cela : tous les rois valent 0 et
-toutes les figures valent 10. C'est plus facile à apprendre, nettement moins
+toutes les figures valent 10. C'est plus facile à apprendre, et nettement moins
 intéressant à jouer.
 
 ## Le déroulement d'un tour
@@ -85,7 +85,7 @@ Vous la prenez et vous êtes **obligé** de l'échanger contre une de vos cartes
 carte remplacée part à la défausse. Aucun pouvoir. C'est le geste qui donne le plus
 d'information à la table : tout le monde voit que vous vouliez ce 2.
 
-> La règle qui équilibre tout le jeu : un pouvoir ne s'active que sur une carte
+> La règle qui équilibre le jeu : un pouvoir ne s'active que sur une carte
 > **piochée puis défaussée sans être utilisée**. Utiliser une carte pour sa valeur
 > ou pour son pouvoir, il faut choisir.
 
@@ -100,12 +100,12 @@ d'information à la table : tout le monde voit que vous vouliez ce 2.
 | **As** *(optionnel)* | Donne la carte piochée au joueur de ton choix |
 
 Le roi noir est à la fois le pouvoir le plus fort et la pire carte à garder en main :
-13 points si vous le conservez, un double coup d'œil plus un échange si vous le
+13 points si vous le conservez, un double coup d'œil suivi d'un échange si vous le
 défaussez. C'est une carte « maintenant ou jamais ».
 
 Le Valet et la Dame échangent **à l'aveugle** : vous ne voyez ni la carte que vous
-donnez ni celle que vous prenez. C'est une arme redoutable pour qui a bien suivi la
-partie — et un suicide pour les autres.
+donnez, ni celle que vous prenez. C'est une arme redoutable pour qui a bien suivi la
+partie, et un suicide pour les autres.
 
 Viser une carte à laquelle vous n'avez pas droit met fin à votre tour et vous coûte
 une carte de pénalité, face cachée. Un pouvoir mal utilisé est un pouvoir perdu.
@@ -119,9 +119,9 @@ pile.
 - **C'est juste** : la carte quitte le jeu pour de bon, votre case reste vide, et
   votre total baisse d'autant. C'est le seul moyen de réduire son jeu à moins de
   quatre cartes, et la route la plus rapide vers un score très bas.
-- **C'est faux** : la carte revient face cachée à sa place — et vous prenez une
-  carte de pénalité. Vous avez perdu sur les deux tableaux : la table a vu votre
-  carte, et votre jeu a grandi.
+- **C'est faux** : la carte revient face cachée à sa place, et vous prenez une carte
+  de pénalité. Vous avez perdu sur les deux tableaux, puisque la table a vu votre
+  carte et que votre jeu a grandi.
 
 Vider complètement son jeu par défausse rapide termine la manche immédiatement, avec
 un score de 0. C'est rare, et c'est très satisfaisant.
@@ -143,7 +143,7 @@ Ensuite :
 
 - Si l'annonceur est **strictement le plus bas**, il marque **0**. Les autres
   marquent la somme de leurs cartes.
-- S'il ne l'est pas — **égalité comprise** — son total est **doublé**. Les autres
+- S'il ne l'est pas, **égalité comprise**, son total est **doublé**. Les autres
   marquent leur somme normalement.
 
 C'est ce doublement qui fait du Cactus un jeu de pari. Annoncer avec 9 points quand
@@ -171,8 +171,8 @@ Ces quatre réflexes sont détaillés dans
 ### À combien de joueurs peut-on jouer au Cactus ?
 
 De 2 à 6 avec un seul jeu de 52 cartes. À deux, la partie est plus tendue et la
-mémoire compte davantage : tout ce que fait l'adversaire vous concerne. Au-delà de
-quatre joueurs, mélangez deux jeux.
+mémoire compte davantage, puisque tout ce que fait l'adversaire vous concerne.
+Au-delà de quatre joueurs, mélangez deux jeux.
 
 ### Le Cactus, le Dutch et le Tamalou, c'est le même jeu ?
 

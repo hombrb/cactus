@@ -1,7 +1,7 @@
 ---
 title: Les meilleurs jeux de cartes à deux avec un jeu de 52
-metaTitle: Jeux de cartes à deux : 7 idées avec un jeu de 52 cartes
-description: Sept jeux de cartes qui fonctionnent vraiment à deux joueurs, du plus rapide au plus tactique — durée, difficulté, et ce que chacun demande.
+metaTitle: Jeux de cartes à deux : 7 idées avec un jeu de 52
+description: Sept jeux de cartes qui fonctionnent vraiment à deux joueurs, du plus rapide au plus tactique, avec leur durée, leur difficulté et ce que chacun demande.
 lead: La plupart des grands jeux de cartes s'écroulent à deux joueurs : la belote a besoin de quatre, le tarot de trois, le président de cinq. Voici ceux qui tiennent debout en tête-à-tête, avec un simple jeu de 52 cartes.
 published: 2026-07-01
 updated: 2026-08-12
@@ -11,9 +11,9 @@ related: regles-du-jeu-de-cactus, comment-gagner-au-cactus, jouer-au-cactus-en-l
 
 ## Ce qui fait un bon jeu à deux
 
-Un bon jeu en tête-à-tête a besoin de trois choses : **une décision à chaque tour**
-(sinon on subit la distribution), **une information cachée** (sinon tout se calcule),
-et **une manche courte** (à deux, une manche ratée est vite pénible).
+Un bon jeu en tête-à-tête demande une décision à chaque tour, sans quoi on subit la
+distribution, et une information cachée, sans quoi tout se calcule. Il vaut mieux
+aussi que la manche soit courte : à deux, une manche ratée est vite pénible.
 
 Les jeux ci-dessous sont classés du plus rapide à apprendre au plus tactique.
 
@@ -25,8 +25,8 @@ Chacun pose une carte à tour de rôle ; dès que deux cartes identiques se suiv
 premier à taper sur le tas le ramasse. Le gagnant est celui qui récupère tout le
 paquet.
 
-C'est un jeu de réflexes pur, parfait pour cinq minutes d'attente, mais qui n'a
-strictement aucune profondeur. Après trois parties, on passe à autre chose.
+C'est un jeu de réflexes pur, parfait pour cinq minutes d'attente, mais sans aucune
+profondeur. Après trois parties, on passe à autre chose.
 
 ## Le Huit américain
 
@@ -45,7 +45,7 @@ Amusant, mais le hasard de la pioche décide souvent la partie.
 
 Combinaisons de trois cartes ou plus, suites de même couleur, et cette tension
 particulière du joueur qui garde une carte parce qu'il devine que l'autre l'attend.
-À deux, le Rami est excellent — c'est le jeu de la liste qui récompense le plus la
+À deux, le Rami est excellent : c'est le jeu de la liste qui récompense le plus la
 patience.
 
 Son défaut : il est long, et une main mal distribuée se subit jusqu'au bout.
@@ -66,8 +66,8 @@ Si vous cherchez un jeu à jouer cent fois, c'est celui-là.
 **30 minutes · règles denses · demande de la place**
 
 Une réussite en duel : deux joueurs, deux paquets, une course à qui videra sa pile
-en premier — en ayant le droit de corriger les erreurs de l'autre, ce qui donne au
-jeu sa réputation de tueur d'amitiés.
+en premier, avec le droit de corriger les erreurs de l'autre, ce qui donne au jeu sa
+réputation de tueur d'amitiés.
 
 Superbe, mais il faut une grande table et une demi-heure d'explications.
 
@@ -85,12 +85,12 @@ d'enfance, à sa juste place.
 
 Quatre cartes face cachée devant chacun, dont on ne connaît que deux au départ. À
 chaque tour, on pioche et on décide : garder la carte pour sa valeur, ou la
-défausser pour déclencher son pouvoir — regarder une carte, en échanger une à
-l'aveugle, voler celle de l'autre. Quand on se croit le plus bas, on annonce
-**« Cactus »**, l'adversaire joue un dernier tour, et on compte. Se tromper double
-son score.
+défausser pour déclencher son pouvoir, qui permet de regarder une carte, d'en
+échanger une à l'aveugle ou de voler celle de l'autre. Quand on se croit le plus
+bas, on annonce **« Cactus »**, l'adversaire joue un dernier tour, et on compte. Se
+tromper double son score.
 
-À deux, c'est le jeu qui coche le plus de cases : chaque tour est une décision, tout
+À deux, c'est le jeu qui coche le plus de cases. Chaque tour est une décision, tout
 est caché, une manche dure cinq minutes, et le niveau monte réellement avec
 l'expérience. C'est aussi le seul de la liste où **se souvenir** est la compétence
 principale.
@@ -114,7 +114,7 @@ Les règles complètes tiennent en une page :
 
 C'est le cas le plus fréquent : deux personnes, une table, un train, et aucun jeu de
 52 dans la poche. Un téléphone posé à plat entre vous deux remplace parfaitement le
-tapis — chacun voit sa moitié à l'endroit, la pioche et la défausse sont au milieu,
+tapis. Chacun voit sa moitié à l'endroit, la pioche et la défausse sont au milieu,
 et les cartes que vous avez le droit de regarder se dévoilent en gardant le doigt
 dessus, la main en coupe.
 
@@ -144,5 +144,5 @@ toutes les figures à 10 et le 8 comme seule carte à pouvoir.
 ### Quel jeu de cartes à deux pour un long voyage ?
 
 Le Rami ou le Gin-rummy si vous avez une tablette pour poser les cartes ; le Cactus
-sur un téléphone si vous n'avez ni table ni jeu de cartes — il fonctionne hors ligne,
-donc dans le métro ou en avion aussi.
+sur un téléphone si vous n'avez ni table ni jeu de cartes, puisqu'il fonctionne hors
+ligne, donc dans le métro ou en avion aussi.

@@ -12,13 +12,7 @@ import { describe, expect, it } from "vitest";
 import { buildBlog, siteUrl, type SourceFile } from "../src/blog/build";
 import { extractFaq, formatDate, parseArticle, parseFrontMatter } from "../src/blog/content";
 import { renderInline, renderMarkdown, slugify } from "../src/blog/markdown";
-import {
-  PRODUCTION_URL,
-  renderArticlePage,
-  renderRobots,
-  renderSitemap,
-  type Site,
-} from "../src/blog/page";
+import { renderArticlePage, renderRobots, renderSitemap, type Site } from "../src/blog/page";
 
 const SITE: Site = { url: "https://example.test", css: "/*css*/" };
 
@@ -211,26 +205,17 @@ describe("pages", () => {
     expect(siteUrl(undefined)).toMatch(/^https:\/\/[^/]+$/);
   });
 
-  it("asks to be indexed only from the public domain", () => {
-    const at = (url: string) => {
-      const site: Site = { url, css: "" };
-      return {
-        page: renderArticlePage(parseArticle("a.md", article()), [], site),
-        robots: renderRobots(site),
-      };
-    };
+  it("asks to be indexed, and sends crawlers to its own sitemap", () => {
+    expect(renderArticlePage(parseArticle("a.md", article()), [], SITE)).toContain(
+      '<meta name="robots" content="index, follow',
+    );
+    expect(renderRobots(SITE)).toContain("Sitemap: https://example.test/sitemap.xml");
+  });
 
-    const production = at(PRODUCTION_URL);
-    expect(production.page).toContain('<meta name="robots" content="index, follow');
-    expect(production.robots).toContain("Allow: /");
-    expect(production.robots).toContain(`Sitemap: ${PRODUCTION_URL}/sitemap.xml`);
-
-    // The workers.dev deploy serves the same articles at another address; left
-    // indexable, it would compete with the real site for its own keywords.
-    const development = at("https://cactus.goats-wiser-9h.workers.dev");
-    expect(development.page).toContain('<meta name="robots" content="noindex, nofollow"');
-    expect(development.robots).toContain("Disallow: /");
-    expect(development.robots).not.toContain("Sitemap:");
+  it("is built for one address, whichever deploy serves it", () => {
+    // The workers.dev deploy serves the same files; their canonical points at
+    // the public site, which is what folds the two copies into one.
+    expect(siteUrl(undefined)).toBe("https://playcactus.co");
   });
 });
 

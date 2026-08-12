@@ -30,7 +30,7 @@ export function renderMenu(root: HTMLElement, actions: MenuActions): void {
            purpose — those pages exist to be indexed and to bring players here,
            which a client-rendered route could not do. -->
       <a class="menu__blog" href="/blog/">
-        Blog <span aria-hidden="true">·</span> règles, variantes et stratégie
+        Blog <span aria-hidden="true">·</span> les règles et la stratégie
       </a>
 
       <p class="hint" data-install hidden>

@@ -1,6 +1,6 @@
 ---
 title: Jouer au Cactus en ligne, gratuitement et sans compte
-metaTitle: Jouer au Cactus en ligne — gratuit, sans compte, hors ligne
+metaTitle: Jouer au Cactus en ligne : gratuit et sans compte
 description: Comment jouer au Cactus à deux sur un seul téléphone ou à distance avec un code de salon : sans compte, sans publicité, et même sans connexion.
 lead: Deux façons de jouer une manche de Cactus quand personne n'a de jeu de 52 cartes sous la main : **un seul téléphone posé à plat** entre les deux joueurs, ou **un téléphone chacun** reliés par un code à six caractères.
 published: 2026-08-10
@@ -16,9 +16,8 @@ moitié à l'endroit**, la pioche et la défausse sont au milieu.
 
 Chaque joueur a une rangée privée **tout au bord de son côté**, le plus loin
 possible de l'adversaire. C'est là qu'arrive la carte que l'on vient de piocher, et
-c'est là que l'on regarde une carte révélée par un pouvoir — en **maintenant le
-doigt dessus**, la main en coupe autour du téléphone, exactement comme on cacherait
-un jeu de cartes.
+c'est là que l'on regarde une carte révélée par un pouvoir, en **maintenant le doigt
+dessus**, la main en coupe autour du téléphone, comme on cacherait un jeu de cartes.
 
 Rien à créer, rien à attendre : on ouvre le jeu, on appuie sur *Jouer sur ce
 téléphone*, et la première manche commence.
@@ -28,16 +27,16 @@ téléphone*, et la première manche commence.
 Pour jouer sans être dans la même pièce :
 
 1. Un joueur choisit *Jouer à plusieurs*, entre son pseudo et **crée une partie**.
-2. L'application affiche un **code de six caractères** — des lettres et des
-   chiffres, sans les caractères que l'on confond au téléphone.
+2. L'application affiche un **code de six caractères**, des lettres et des chiffres,
+   sans les caractères que l'on confond au téléphone.
 3. L'autre joueur ouvre le jeu, entre ce code, et rejoint le salon.
 4. Le salon affiche les joueurs présents **et les règles choisies par l'hôte** ;
    l'hôte lance la partie quand tout le monde est là.
 
 Sur son propre téléphone, chacun ne voit que ce à quoi il a droit : la carte piochée
 se pose à droite de sa rangée, et les cartes de l'adversaire restent des dos de
-cartes. Le serveur ne montre à personne ce qu'il n'a pas le droit de voir — c'est la
-même règle qu'à une vraie table, appliquée par le code.
+cartes. Le serveur ne montre à personne ce qu'il n'a pas le droit de voir, ce qui
+est la règle d'une vraie table, appliquée par le code.
 
 ## Les règles se choisissent avant de commencer
 
@@ -53,13 +52,13 @@ sont des réglages :
 - le seuil de fin de partie.
 
 En ligne, **l'hôte impose ses réglages à la table**, et le salon les affiche avant
-le début de la partie : personne ne découvre au décompte que le roi noir valait 13.
+le début de la partie. Personne ne découvre au décompte que le roi noir valait 13.
 
 ## Gratuit, sans compte, sans publicité
 
 Il n'y a ni inscription, ni email, ni bouton « connexion avec ». Une partie à
-distance a besoin d'un pseudo — c'est ce que l'autre joueur voit dans le salon — et
-c'est tout. Rien n'est collecté, rien n'est revendu, et il n'y a aucune publicité.
+distance a besoin d'un pseudo, celui que l'autre joueur voit dans le salon, et c'est
+tout. Rien n'est collecté, rien n'est revendu, et il n'y a aucune publicité.
 
 Le code de l'application est [public](https://github.com/hombrb/cactus), ce qui est
 la seule façon honnête de prouver ce paragraphe.
@@ -71,7 +70,7 @@ ouverte une première fois, elle reste disponible : dans le métro, en avion, en
 vacances sans réseau.
 
 Sur iPhone, **Partager → Sur l'écran d'accueil** installe le jeu comme une
-application : icône, plein écran, et démarrage instantané. Sur Android, le menu du
+application : icône, plein écran, démarrage instantané. Sur Android, le menu du
 navigateur propose *Installer l'application*. Aucune boutique, aucun téléchargement.
 
 Seul le mode à distance a besoin d'internet, le temps de la partie.
@@ -107,7 +106,7 @@ connexion.
 
 ### Sur quels téléphones ça marche ?
 
-Sur tout téléphone récent avec un navigateur à jour : iPhone comme Android, et aussi
+Sur tout téléphone récent avec un navigateur à jour, iPhone comme Android, et aussi
 sur ordinateur. Il n'y a rien à installer, mais le jeu peut être ajouté à l'écran
 d'accueil pour s'ouvrir en plein écran.
 
