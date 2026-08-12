@@ -43,6 +43,44 @@ défausse — celle qu'un échange remplace, et celle que tu envoies en défauss
 rapide. L'hôte d'une partie en ligne impose son choix à la table, et le salon
 l'affiche.
 
+## Le blog
+
+Les articles vivent dans `content/blog/*.md` : un fichier, un article, une URL
+(`/blog/<nom-du-fichier>/`). Le build les transforme en **pages HTML statiques**,
+sans une ligne de JavaScript — c'est ce qui les rend indexables et instantanées —
+et génère au passage `sitemap.xml` et `robots.txt`.
+
+L'en-tête de chaque fichier porte les métadonnées :
+
+```
+---
+title: Règles du Cactus : le jeu de cartes expliqué en 5 minutes
+metaTitle: Règles du Cactus — le jeu de cartes expliqué (2026)   # ≤ 60 caractères
+description: …                                                    # 80 à 165 caractères
+lead: Le chapeau de l'article, en markdown.
+published: 2026-04-14
+updated: 2026-08-12
+keywords: règles cactus, jeu de cartes cactus
+related: comment-gagner-au-cactus, jouer-au-cactus-en-ligne
+---
+```
+
+Une section `## Questions fréquentes` dont les `###` sont des questions devient
+automatiquement un bloc **FAQPage** dans les données structurées : la page que lit
+un visiteur et celle que lit Google ne peuvent pas diverger, il n'y a qu'une copie.
+
+Les URL absolues (canonical, sitemap, partages) ont besoin de savoir où le site est
+déployé. Par défaut c'est le sous-domaine `workers.dev` ; pour un vrai domaine :
+
+```bash
+SITE_URL=https://exemple.fr npm run build
+```
+
+`npm run check:blog` relit le `dist/` produit et vérifie ce que les pages
+promettent : canonical cohérent, titres et descriptions à la bonne longueur,
+données structurées valides, liens internes qui existent, sitemap complet, et
+appel à l'action présent sur chaque article.
+
 ## Développement
 
 ```bash
@@ -65,6 +103,8 @@ statique.
 docs/          la spécification complète des règles et du moteur (anglais)
 src/engine/    le moteur, pur et sans DOM — transcription de docs/03 à docs/09
 src/ui/        le rendu, sans framework : DOM conservé, patché à chaque état
+src/blog/      le générateur du blog : markdown, gabarits, données structurées
+content/blog/  les articles, un fichier markdown chacun
 tests/         rejoue la partie de référence de docs/11 et vérifie les invariants
 ```
 
