@@ -22,19 +22,6 @@ const NAME = "Cactus";
 const TAGLINE = "Le jeu de cartes Cactus, gratuit et sans compte.";
 const REPOSITORY = "https://github.com/hombrb/cactus";
 
-/**
- * The domain the blog is written for.
- *
- * Everything else — the workers.dev subdomain the app is deployed to today, a
- * preview, a fork — is a copy of the same pages at another address, which is
- * the textbook way to end up competing with yourself in the results. So a build
- * for any other origin is emitted `noindex`, and only `SITE_URL=…playcactus.co`
- * produces pages that ask to be indexed at all.
- */
-export const PRODUCTION_URL = "https://playcactus.co";
-
-export const isIndexable = (url: string): boolean => url === PRODUCTION_URL;
-
 export const BLOG_PATH = "/blog/";
 
 export const articlePath = (slug: string): string => `${BLOG_PATH}${slug}/`;
@@ -72,11 +59,7 @@ function head(meta: Meta, site: Site): string {
 <title>${escapeHtml(meta.title)}</title>
 <meta name="description" content="${escapeAttr(meta.description)}" />
 <link rel="canonical" href="${escapeAttr(meta.canonical)}" />
-<meta name="robots" content="${
-    isIndexable(site.url)
-      ? "index, follow, max-image-preview:large, max-snippet:-1"
-      : "noindex, nofollow"
-  }" />
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
 <meta name="theme-color" content="#0c2c20" />
 <meta name="color-scheme" content="dark" />
 
@@ -452,8 +435,5 @@ function latest(articles: readonly Article[]): string {
 }
 
 export function renderRobots(site: Site): string {
-  if (!isIndexable(site.url)) {
-    return `# Déploiement de développement — la version publique est ${PRODUCTION_URL}\nUser-agent: *\nDisallow: /\n`;
-  }
   return `User-agent: *\nAllow: /\n\nSitemap: ${site.url}/sitemap.xml\n`;
 }
